@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.2.6
+
+- Trust Kimai loopback hosts in the ephemeral Docker E2E configuration so Kimai’s own container health request is not rejected as an untrusted host.
+- Add a migration contract test for the complete Service Provider persistence schema; the E2E workflow continues to validate the table against a real fresh SQLite installation.
+
 ## 0.2.5
 
 - Configure the internal `e2e-nextcloud` Docker hostname as a trusted domain in the ephemeral Kimai E2E installation, preventing Nextcloud’s expected HTTP 400 host rejection from masking metadata checks.

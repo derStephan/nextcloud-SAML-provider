@@ -97,7 +97,9 @@ jobs:
           set -euo pipefail; umask 077
           printf '%s' "$NEXTCLOUD_SIGNING_PRIVATE_KEY" > signing.key; printf '%s' "$NEXTCLOUD_SIGNING_CERTIFICATE" > signing.crt
           mkdir -p build/release/saml_provider; git archive --format=tar HEAD | tar -x -C build/release/saml_provider
-          docker run --rm --volume "$PWD/build/release:/release" --volume "$PWD/signing.key:/secrets/signing.key:ro" --volume "$PWD/signing.crt:/secrets/signing.crt:ro" "nextcloud:${NEXTCLOUD_VERSION}-apache" php /var/www/html/occ integrity:sign-app --privateKey=/secrets/signing.key --certificate=/secrets/signing.crt --path=/release/saml_provider
+          # /var/www/html is a Docker volume and is empty before the image entrypoint initializes it.
+          # The unmodified Nextcloud source, including occ, is always available at /usr/src/nextcloud.
+          docker run --rm --entrypoint php --volume "$PWD/build/release:/release" --volume "$PWD/signing.key:/secrets/signing.key:ro" --volume "$PWD/signing.crt:/secrets/signing.crt:ro" "nextcloud:${NEXTCLOUD_VERSION}-apache" /usr/src/nextcloud/occ integrity:sign-app --privateKey=/secrets/signing.key --certificate=/secrets/signing.crt --path=/release/saml_provider
           test -f build/release/saml_provider/appinfo/signature.json; tar -C build/release -czf build/saml_provider.tar.gz saml_provider; rm -f signing.key signing.crt
       - name: Create GitHub Release
         if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'

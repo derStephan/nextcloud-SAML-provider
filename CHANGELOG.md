@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.1.26
+
+- Upgrade the Codecov action to v6 to remove the Node.js 20 `actions/github-script` runtime warning.
+- Run Nextcloud app signing through `/usr/src/nextcloud/occ` with the Docker entrypoint bypassed, so signing works before the image initializes its `/var/www/html` data volume.
+
 ## 0.1.25
 
 - Add a GitHub Release-downloads badge to the README.

@@ -13,7 +13,6 @@ class SignatureService {
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' => OPENSSL_ALGO_SHA256,
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384' => OPENSSL_ALGO_SHA384,
         'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512' => OPENSSL_ALGO_SHA512,
-        'http://www.w3.org/2000/09/xmldsig#rsa-sha1'        => OPENSSL_ALGO_SHA1,
     ];
 
     public function spCanSign(ServiceProvider $sp): bool {
@@ -25,7 +24,7 @@ class SignatureService {
      * Securely reconstructs the signed content from the raw server QUERY_STRING
      * to prevent encoding/decoding inconsistencies from bypassing validation.
      */
-    public function verifyRedirectSignature(array $params, ServiceProvider $sp): bool {
+    public function verifyRedirectSignature(array $params, ServiceProvider $sp, string $rawQuery): bool {
         $signatureB64 = $params['Signature'] ?? null;
         $sigAlg       = $params['SigAlg'] ?? null;
         $samlRequest  = $params['SAMLRequest'] ?? null;
@@ -38,7 +37,6 @@ class SignatureService {
 
         // To comply with SAML 2.0 specifications, we must use the raw, urlencoded 
         // parameters directly from the QUERY_STRING rather than re-encoding them.
-        $rawQuery = $_SERVER['QUERY_STRING'] ?? '';
         if ($rawQuery === '') {
             return false;
         }
@@ -84,10 +82,9 @@ class SignatureService {
      */
     public function verifyPostSignature(string $xml, ServiceProvider $sp): bool {
         $doc = new \DOMDocument();
-        // Prevent XXE completely
-        $oldEntityLoader = libxml_disable_entity_loader(true);
-        $loadStatus = $doc->loadXML($xml, LIBXML_NONET | LIBXML_NOENT | LIBXML_DTDLOAD | LIBXML_DTDATTR);
-        libxml_disable_entity_loader($oldEntityLoader);
+        // Never substitute entities or load DTDs. This rejects external entities and
+        // avoids entity-expansion attacks without deprecated global libxml toggles.
+        $loadStatus = $doc->loadXML($xml, LIBXML_NONET | LIBXML_NOCDATA);
 
         if (!$loadStatus) {
             return false;
@@ -166,6 +163,7 @@ class SignatureService {
         $cloneDocument->appendChild($clonedRoot);
         $clonedXpath = new \DOMXPath($cloneDocument);
         $clonedXpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+        $clonedXpath->registerNamespace('samlp', 'urn:oasis:names:tc:SAML:2.0:protocol');
         $clonedSigNodes = $clonedXpath->query('/samlp:AuthnRequest/ds:Signature');
         if ($clonedSigNodes !== false && $clonedSigNodes->length === 1) {
             $signatureToRemove = $clonedSigNodes->item(0);
@@ -177,7 +175,6 @@ class SignatureService {
         $actualDigest = base64_encode(match ($digestAlg) {
             'http://www.w3.org/2001/04/xmlenc#sha256' => hash('sha256', $clonedRoot->C14N(true, false), true),
             'http://www.w3.org/2001/04/xmlenc#sha512' => hash('sha512', $clonedRoot->C14N(true, false), true),
-            'http://www.w3.org/2000/09/xmldsig#sha1'  => hash('sha1', $clonedRoot->C14N(true, false), true),
             default => '',
         });
 

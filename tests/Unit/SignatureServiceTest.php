@@ -12,17 +12,23 @@ final class SignatureServiceTest extends TestCase {
     public function testVerifiesValidRedirectSignatureAndRejectsTampering(): void {
         [$certificate, $privateKey] = $this->newCertificate(); $sp = $this->provider($certificate);
         $request = rawurlencode(base64_encode('request')); $relay = rawurlencode('https://sp.example.test/after'); $algorithm = rawurlencode('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'); $signed = "SAMLRequest={$request}&RelayState={$relay}&SigAlg={$algorithm}";
-        openssl_sign($signed, $signature, $privateKey, OPENSSL_ALGO_SHA256); $_SERVER['QUERY_STRING'] = $signed . '&Signature=' . rawurlencode(base64_encode($signature));
+        openssl_sign($signed, $signature, $privateKey, OPENSSL_ALGO_SHA256); $rawQuery = $signed . '&Signature=' . rawurlencode(base64_encode($signature));
         $params = ['SAMLRequest' => base64_decode(rawurldecode($request)), 'RelayState' => rawurldecode($relay), 'SigAlg' => rawurldecode($algorithm), 'Signature' => base64_encode($signature)]; $service = new SignatureService();
-        self::assertTrue($service->spCanSign($sp)); self::assertTrue($service->verifyRedirectSignature($params, $sp)); $params['Signature'] = base64_encode('invalid'); self::assertFalse($service->verifyRedirectSignature($params, $sp));
+        self::assertTrue($service->spCanSign($sp)); self::assertTrue($service->verifyRedirectSignature($params, $sp, $rawQuery)); $params['Signature'] = base64_encode('invalid'); self::assertFalse($service->verifyRedirectSignature($params, $sp, $rawQuery));
     }
     public function testVerifiesValidSignedPostRequestAndRejectsDigestTampering(): void {
         [$certificate, $privateKey] = $this->newCertificate(); $sp = $this->provider($certificate); $service = new SignatureService();
         $xml = $this->signedAuthnRequest('_post-request', $privateKey);
         self::assertTrue($service->verifyPostSignature($xml, $sp));
         self::assertFalse($service->verifyPostSignature(str_replace('https://sp.example.test/acs', 'https://evil.example.test/acs', $xml), $sp));
+        $wrapped = str_replace('</samlp:AuthnRequest>', '<samlp:AuthnRequest ID="_post-request"/></samlp:AuthnRequest>', $xml);
+        self::assertFalse($service->verifyPostSignature($wrapped, $sp));
     }
-    public function testRejectsMissingUnsupportedAndMalformedSignatureInputs(): void { $sp = new ServiceProvider(); $service = new SignatureService(); self::assertFalse($service->spCanSign($sp)); self::assertFalse($service->verifyRedirectSignature([], $sp)); self::assertFalse($service->verifyPostSignature('<xml/>', $sp)); self::assertFalse($service->verifyPostSignature('<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_x"/>', $sp)); }
+    public function testRejectsLegacySha1RedirectSignature(): void {
+        $sp = new ServiceProvider(); $service = new SignatureService();
+        self::assertFalse($service->verifyRedirectSignature(['SAMLRequest' => 'x', 'SigAlg' => 'http://www.w3.org/2000/09/xmldsig#rsa-sha1', 'Signature' => 'x'], $sp, 'SAMLRequest=x&SigAlg=http%3A%2F%2Fwww.w3.org%2F2000%2F09%2Fxmldsig%23rsa-sha1&Signature=x'));
+    }
+    public function testRejectsMissingUnsupportedAndMalformedSignatureInputs(): void { $sp = new ServiceProvider(); $service = new SignatureService(); self::assertFalse($service->spCanSign($sp)); self::assertFalse($service->verifyRedirectSignature([], $sp, '')); self::assertFalse($service->verifyPostSignature('<xml/>', $sp)); self::assertFalse($service->verifyPostSignature('<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_x"/>', $sp)); }
     private function provider(string $certificate): ServiceProvider { $sp = new ServiceProvider(); $sp->setSpCertificate($certificate); return $sp; }
     private function signedAuthnRequest(string $id, string $privateKey): string {
         $unsigned = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="'.$id.'" AssertionConsumerServiceURL="https://sp.example.test/acs"><saml:Issuer>https://sp.example.test/metadata</saml:Issuer></samlp:AuthnRequest>';

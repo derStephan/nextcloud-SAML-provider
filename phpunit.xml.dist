@@ -13,8 +13,7 @@
     </testsuites>
     <source>
         <include>
-            <directory suffix=".php">lib/Service</directory>
-            <directory suffix=".php">lib/Db</directory>
+            <directory suffix=".php">lib</directory>
         </include>
     </source>
     <coverage includeUncoveredFiles="true"/>

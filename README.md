@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -202,6 +202,11 @@ Unsigned requests or requests signed with a different certificate will then be r
 | The IdP does not return to the service | Check browser developer tools for CSP errors and verify that the ACS hostname is exactly the registered service URL. |
 
 For Kimai-specific configuration and behavior, see the official [Kimai SAML documentation](https://www.kimai.org/documentation/saml.html).
+
+## SAML security limitations
+
+- This IdP does not keep a server-side replay cache for issued assertions. Service Providers should validate `InResponseTo`, assertion IDs, timestamps, audience, recipient, and XML signatures, and reject replayed responses.
+- SP-initiated Single Logout is not implemented as a validated SAML LogoutRequest flow.
 
 ## Security notes
 

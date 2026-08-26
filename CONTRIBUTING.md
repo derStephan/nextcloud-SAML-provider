@@ -21,7 +21,7 @@ Thank you for contributing.
 - Explain the problem and the solution.
 - Do not include credentials, private keys, certificates, production URLs, or real user data.
 - Preserve backwards compatibility where feasible.
-- Add migration-free schema changes carefully; this app uses `appinfo/database.xml` for fresh installs.
+- Add every schema change as an idempotent migration in `lib/Migration/`; do not use obsolete `appinfo/database.xml`.
 
 ## Development scope
 

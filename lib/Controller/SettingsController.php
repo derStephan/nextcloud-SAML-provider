@@ -100,9 +100,27 @@ class SettingsController extends Controller {
             ]);
             throw $e;
         }
+        // Validate the complete prospective configuration, not only create requests.
+        // Otherwise an update could add an unsafe ACS URL or enable signing without a certificate.
+        $acsUrl = array_key_exists('acsUrl', $fields) ? (string)$fields['acsUrl'] : $sp->getAcsUrl();
+        $nameIdFormat = array_key_exists('nameIdFormat', $fields) ? (string)$fields['nameIdFormat'] : $sp->getNameIdFormat();
+        $attributeMapping = array_key_exists('attributeMapping', $fields) ? (string)$fields['attributeMapping'] : $sp->getAttributeMapping();
+        $spCertificate = array_key_exists('spCertificate', $fields) ? trim((string)$fields['spCertificate']) : $sp->getSpCertificate();
+        $requireSignedRequests = array_key_exists('requireSignedRequests', $fields) ? (bool)$fields['requireSignedRequests'] : $sp->getRequireSignedRequests();
+        $error = $this->validateSpInput($sp->getSpEntityId(), $acsUrl, $nameIdFormat, $attributeMapping, $spCertificate, $requireSignedRequests);
+        if ($error !== null) {
+            return new DataResponse(['error' => $error], Http::STATUS_BAD_REQUEST);
+        }
         foreach (['spName', 'acsUrl', 'sloUrl', 'nameIdFormat', 'attributeMapping', 'spCertificate'] as $key) {
             if (array_key_exists($key, $fields)) {
-                $sp->{'set' . ucfirst($key)}((string)$fields[$key]);
+                $value = (string)$fields[$key];
+                if (in_array($key, ['sloUrl', 'spCertificate'], true)) {
+                    $sp->{'set' . ucfirst($key)}($value !== '' ? $value : null);
+                } elseif ($key === 'attributeMapping') {
+                    $sp->setAttributeMapping($value !== '{}' ? $value : null);
+                } else {
+                    $sp->{'set' . ucfirst($key)}($value);
+                }
             }
         }
         foreach (['signAssertions', 'requireSignedRequests', 'isEnabled'] as $key) {

@@ -12,6 +12,9 @@ use Psr\Log\LoggerInterface;
  * Minimal SAML 2.0 IdP implementation (Web Browser SSO profile).
  */
 class SamlService {
+    /** Maximum decoded AuthnRequest size (1 MiB), including post-inflate Redirect requests. */
+    private const MAX_AUTHN_REQUEST_BYTES = 1048576;
+
     private const NS_SAMLP = 'urn:oasis:names:tc:SAML:2.0:protocol';
     private const NS_SAML  = 'urn:oasis:names:tc:SAML:2.0:assertion';
     private const NS_DS    = 'http://www.w3.org/2000/09/xmldsig#';
@@ -71,22 +74,20 @@ XML;
      */
     public function parseAuthnRequest(string $samlRequest, string $binding): array {
         $raw = base64_decode($samlRequest, true);
-        if ($raw === false) {
-            throw new \InvalidArgumentException('SAMLRequest is not valid base64');
+        if ($raw === false || strlen($raw) > self::MAX_AUTHN_REQUEST_BYTES) {
+            throw new \InvalidArgumentException('SAMLRequest is invalid or exceeds the size limit');
         }
         if ($binding === 'redirect') {
             $inflated = @gzinflate($raw);
-            if ($inflated === false) {
-                throw new \InvalidArgumentException('SAMLRequest DEFLATE decompression failed');
+            if ($inflated === false || strlen($inflated) > self::MAX_AUTHN_REQUEST_BYTES) {
+                throw new \InvalidArgumentException('SAMLRequest DEFLATE decompression failed or exceeds the size limit');
             }
             $raw = $inflated;
         }
 
         $doc = new \DOMDocument();
-        // SECURITY: Prevent XXE Completely
-        $oldEntityLoader = libxml_disable_entity_loader(true);
-        $loadStatus = $doc->loadXML($raw, LIBXML_NONET | LIBXML_NOENT | LIBXML_DTDLOAD | LIBXML_DTDATTR);
-        libxml_disable_entity_loader($oldEntityLoader);
+        // Do not load DTDs or substitute entities; LIBXML_NONET prevents network access.
+        $loadStatus = $doc->loadXML($raw, LIBXML_NONET | LIBXML_NOCDATA);
 
         if (!$loadStatus) {
             throw new \InvalidArgumentException('SAMLRequest is not well-formed XML');
@@ -141,6 +142,7 @@ XML;
         string $binding,
         array $requestParams,
         ServiceProvider $sp,
+        string $rawQuery = '',
     ): void {
         $canVerify = $this->signatureService->spCanSign($sp);
 
@@ -154,7 +156,7 @@ XML;
         }
 
         $valid = $binding === 'redirect'
-            ? $this->signatureService->verifyRedirectSignature($requestParams, $sp)
+            ? $this->signatureService->verifyRedirectSignature($requestParams, $sp, $rawQuery)
             : $this->signatureService->verifyPostSignature($authnRequest['rawXml'], $sp);
 
         if (!$valid) {
@@ -333,12 +335,27 @@ XML;
             . $this->idpConfig->getCertificateBase64()
             . '</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>';
 
-        return preg_replace(
-            '/(<saml2:Issuer>.*?<\/saml2:Issuer>)/s',
-            '$1' . $signature,
-            $xml,
-            1
-        ) ?? $xml;
+        // Insert the generated Signature structurally, immediately after this element's
+        // Issuer. Do not modify signed XML using string/regex operations.
+        $signatureDocument = new \DOMDocument();
+        if (!$signatureDocument->loadXML($signature, LIBXML_NONET) || !$signatureDocument->documentElement instanceof \DOMElement) {
+            throw new \RuntimeException('Failed to build XML signature');
+        }
+        $xpath = new \DOMXPath($doc);
+        $xpath->registerNamespace('saml2', self::NS_SAML);
+        $issuerNodes = $xpath->query('./saml2:Issuer', $doc->documentElement);
+        if ($issuerNodes === false || $issuerNodes->length !== 1) {
+            throw new \RuntimeException('SAML element has no unique Issuer for signature insertion');
+        }
+        $issuer = $issuerNodes->item(0);
+        $signatureNode = $doc->importNode($signatureDocument->documentElement, true);
+        $parent = $doc->documentElement;
+        $parent->insertBefore($signatureNode, $issuer->nextSibling);
+        $result = $doc->saveXML();
+        if ($result === false) {
+            throw new \RuntimeException('Failed to serialize signed SAML XML');
+        }
+        return $result;
     }
 
     private function e(string $value): string {

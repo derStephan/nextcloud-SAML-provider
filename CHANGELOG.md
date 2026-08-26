@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.4.1
+
+- Fix the `ServiceProvider` import in the SAML controller PHPUnit coverage annotation.
+- Add direct runtime coverage for the administration settings form and its published initial state.
+
 ## 0.4.0
 
 - Declare PHPUnit coverage targets and used dependencies for controller, settings, launcher, and application tests so executed production code is included in the full `lib/` coverage report.

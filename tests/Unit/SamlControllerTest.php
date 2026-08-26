@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace OCA\SAMLProvider\Tests\Unit;
 use OCA\SAMLProvider\Controller\SamlController;
-use OCA\SAMLProvider\Db\ServiceProviderMapper;
+use OCA\SAMLProvider\Db\{ServiceProvider,ServiceProviderMapper};
 use OCA\SAMLProvider\Service\{IdpConfigService,SamlService};
 use OCA\SAMLProvider\Tests\Support\{AppConfig,NullLogger,Request,RouteUrlGenerator,Session,UrlGenerator,User,Server};
 use PHPUnit\Framework\Attributes\CoversClass;

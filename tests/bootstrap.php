@@ -33,6 +33,7 @@ namespace OCA\SAMLProvider\Db {
         public bool $requiresSignedRequests = false; public array $enabled=[]; public array $rows=[];
         public function findByEntityId(string $entityId): ServiceProvider { if ($this->byEntityId === null) { throw new \OCP\AppFramework\Db\DoesNotExistException('Not found'); } return $this->byEntityId; }
         public function find(int $id): ServiceProvider { if ($this->byId === null) { throw new \OCP\AppFramework\Db\DoesNotExistException('Not found'); } return $this->byId; }
+        public function findAll(): array { return $this->rows; }
         public function findAllEnabled(): array { return $this->enabled; }
         public function insert(ServiceProvider $sp): ServiceProvider { $sp->setId(count($this->rows)+1); $this->rows[]=$sp; $this->byEntityId=$sp; $this->byId=$sp; return $sp; }
         public function update(ServiceProvider $sp): ServiceProvider { $this->byId=$sp; return $sp; }

@@ -6,8 +6,11 @@ use OCA\SAMLProvider\Db\ServiceProviderMapper;
 use OCA\SAMLProvider\Service\{IdpConfigService,SamlService};
 use OCA\SAMLProvider\Tests\Support\{AppConfig,NullLogger,Request,RouteUrlGenerator,Session,UrlGenerator,User,Server};
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 #[CoversClass(SamlController::class)]
+#[UsesClass(IdpConfigService::class)]
+#[UsesClass(ServiceProvider::class)]
 final class SamlControllerTest extends TestCase {
  private ServiceProviderMapper $mapper; private IdpConfigService $idp; private RouteUrlGenerator $urls;
  protected function setUp():void { $this->mapper=new ServiceProviderMapper(); $this->idp=new IdpConfigService(new AppConfig(),new UrlGenerator()); $this->urls=new RouteUrlGenerator(); \OC::$server=new Server(); }

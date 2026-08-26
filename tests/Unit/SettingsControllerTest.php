@@ -6,7 +6,12 @@ use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Db\ServiceProviderMapper;
 use OCA\SAMLProvider\Service\IdpConfigService;
 use OCA\SAMLProvider\Tests\Support\{AppConfig,L10N,NullLogger,Request,UrlGenerator};
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+#[CoversClass(SettingsController::class)]
+#[UsesClass(IdpConfigService::class)]
+#[UsesClass(ServiceProvider::class)]
 final class SettingsControllerTest extends TestCase {
  private ServiceProviderMapper $mapper; private SettingsController $controller;
  protected function setUp():void { $this->mapper=new ServiceProviderMapper(); $idp=new IdpConfigService(new AppConfig(),new UrlGenerator()); $this->controller=new SettingsController('saml_provider',new Request(),$this->mapper,$idp,new L10N(),new NullLogger()); }

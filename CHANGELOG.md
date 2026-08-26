@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.4.0
+
+- Declare PHPUnit coverage targets and used dependencies for controller, settings, launcher, and application tests so executed production code is included in the full `lib/` coverage report.
+- Keep strict PHPUnit coverage metadata and the 80% whole-library gate enabled.
+
 ## 0.3.3
 
 - Enforce a fail-closed sequential GitHub Actions pipeline: Unit tests → Nextcloud integration → Kimai SAML E2E → release.

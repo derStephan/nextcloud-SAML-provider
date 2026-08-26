@@ -16,7 +16,7 @@ Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External application
 
 ## Requirements
 
-- Nextcloud 29 through 34
+- Nextcloud 33 or later
 - PHP with the OpenSSL and DOM extensions enabled
 - HTTPS for Nextcloud and every connected service
 - An administrator account
@@ -241,6 +241,6 @@ The coverage command writes `build/coverage/clover.xml` and fails when line cove
 
 The GitHub Actions workflow discovers the PHP versions that are currently supported upstream at the beginning of every run, then tests each of them. It includes releases that still receive security fixes and updates automatically when PHP support status changes. The workflow also runs weekly to detect a newly supported release without requiring a code change. Lifecycle data is obtained from the [endoflife.date PHP API](https://endoflife.date/php), which tracks the upstream PHP support schedule.
 
-A separate integration workflow discovers currently supported Nextcloud major releases from the [Nextcloud lifecycle API](https://endoflife.date/nextcloud). For every supported major version, it starts the matching official Nextcloud Docker image, installs a fresh SQLite-backed instance, enables this app, and verifies that the metadata and SSO routes are registered. It also discovers the newest explicitly versioned Nextcloud RC or beta Apache image from Docker Hub and tests it when one is available. The workflow deliberately does not use Docker Hub's generic `beta` tag because that tag may point to an unrelated historical image. It runs on every push, pull request, weekly schedule, and manual dispatch.
+A separate integration workflow discovers currently supported **Nextcloud 33 or later** major releases from the [Nextcloud lifecycle API](https://endoflife.date/nextcloud). For every supported major version, it starts the matching official Nextcloud Docker image, installs a fresh SQLite-backed instance, enables this app, and verifies that the metadata and SSO routes are registered. It also discovers the newest explicitly versioned Nextcloud RC or beta Apache image from Docker Hub and tests it when one is available. The workflow deliberately does not use Docker Hub's generic `beta` tag because that tag may point to an unrelated historical image. It runs on every push, pull request, weekly schedule, and manual dispatch.
 
 The test bootstrap intentionally loads `tests/Support/TestDoubles.php`, which contains lightweight test-only implementations of the Nextcloud interfaces needed for isolated unit tests. This allows the suite to run without a complete Nextcloud server installation.

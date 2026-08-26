@@ -18,13 +18,13 @@ Features:
 * IdP metadata endpoint for easy SP onboarding
 * App launcher page listing all enabled Service Providers for users
 ]]></description>
-    <version>0.1.20</version>
+    <version>0.1.21</version>
     <licence>mit</licence>
     <author>SAML Provider for Nextcloud contributors</author>
     <namespace>SAMLProvider</namespace>
     <category>security</category>
     <dependencies>
-        <nextcloud min-version="29" max-version="34"/>
+        <nextcloud min-version="33"/>
     </dependencies>
     <settings>
         <admin>OCA\SAMLProvider\Settings\Admin</admin>

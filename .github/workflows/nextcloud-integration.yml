@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | {label: ., image: ("nextcloud:" + . + "-apache")} ] | sort_by(.label | tonumber)')"
+          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | select(tonumber >= 33) | {label: ., image: ("nextcloud:" + . + "-apache")} ] | sort_by(.label | tonumber)')"
 
           # Docker Hub's generic beta tag is historical and unsuitable. Discover the
           # newest explicit release-candidate or beta Apache tag instead, e.g.

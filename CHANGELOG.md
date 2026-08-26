@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.2.5
+
+- Configure the internal `e2e-nextcloud` Docker hostname as a trusted domain in the ephemeral Kimai E2E installation, preventing Nextcloud’s expected HTTP 400 host rejection from masking metadata checks.
+
+## 0.2.4
+
+- Explicitly reject DTD-bearing AuthnRequests before XML parsing, including internal entity declarations.
+- Correct the signed-response regression test to assert that no nested XML declaration is emitted by DOM root-element serialization.
+
 ## 0.2.3
 
 - Restore the 80% coverage gate across the complete `lib/` directory without source exclusions.

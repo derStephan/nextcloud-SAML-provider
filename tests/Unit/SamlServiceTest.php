@@ -61,7 +61,7 @@ final class SamlServiceTest extends TestCase {
     public function testBuildsSignedResponseWithExpectedSubjectAndAttributes(): void {
         $sp = $this->provider(); $response = base64_decode($this->service->buildResponse($sp, new User('alice', 'alice@example.test', 'Alice'), '_request', 'https://attacker.example/acs'), true);
         self::assertNotFalse($response);
-        self::assertSame(1, substr_count($response, '<?xml'));
+        self::assertSame(0, substr_count($response, '<?xml'), 'Nested SAML content must not contain an XML declaration.');
         $document = new \DOMDocument();
         self::assertTrue($document->loadXML($response, LIBXML_NONET));
         self::assertStringContainsString('Destination="https://sp.example.test/acs"', $response);

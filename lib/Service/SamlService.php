@@ -85,6 +85,11 @@ XML;
             $raw = $inflated;
         }
 
+        // SAML AuthnRequests never need a DTD. Reject it before parsing so internal
+        // entity declarations cannot be used for expansion or parser resource attacks.
+        if (preg_match('/<!DOCTYPE\b/i', $raw) === 1) {
+            throw new \InvalidArgumentException('SAMLRequest must not contain a DTD');
+        }
         $doc = new \DOMDocument();
         // Do not load DTDs or substitute entities; LIBXML_NONET prevents network access.
         $loadStatus = $doc->loadXML($raw, LIBXML_NONET | LIBXML_NOCDATA);

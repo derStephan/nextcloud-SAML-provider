@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.5.0
+
+- Expand direct controller coverage for successful metadata, IdP-initiated SSO, registered-SP logout, duplicate SP prevention, valid updates, organization persistence, and certificate generation.
+- Keep the complete `lib/` coverage scope and 80% gate unchanged.
+
 ## 0.4.1
 
 - Fix the `ServiceProvider` import in the SAML controller PHPUnit coverage annotation.

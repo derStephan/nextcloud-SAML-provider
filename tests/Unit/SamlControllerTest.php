@@ -24,5 +24,10 @@ final class SamlControllerTest extends TestCase {
   $service->method('resolveServiceProviderById')->willThrowException(new \RuntimeException('not found'));
   $session=new Session(new User()); $session->loggedIn=true;
   self::assertSame(404,$this->controller(new Request(),$session,$service)->idpInitiated(9)->status);
+ public function testMetadataReturnsDownloadWhenCertificateExists():void { [$cert,$key]=$this->certificate(); $this->idp->setCertificate($cert,$key); $service=$this->createMock(SamlService::class); $service->method('buildMetadataXml')->willReturn('<xml/>'); $response=$this->controller(new Request(),new Session(),$service)->metadata(); self::assertSame('metadata.xml',$response->filename); self::assertSame('<xml/>',$response->data); }
+ public function testSloAcceptsRegisteredServiceProviderHost():void { $sp=new ServiceProvider(); $sp->setAcsUrl('https://sp.example.test/acs'); $this->mapper->enabled=[$sp]; $response=$this->controller(new Request(['RelayState'=>'https://sp.example.test/after']),new Session())->slo(); self::assertSame('https://sp.example.test/after',$response->redirectURL); }
+ public function testIdpInitiatedBuildsPostResponseForLoggedInUser():void { $sp=new ServiceProvider(); $sp->setAcsUrl('https://sp.example.test/acs'); $service=$this->createMock(SamlService::class); $service->method('resolveServiceProviderById')->willReturn($sp); $service->method('buildResponse')->willReturn('encoded-response'); $session=new Session(new User()); $session->loggedIn=true; $response=$this->controller(new Request(),$session,$service)->idpInitiated(1); self::assertSame('post_response',$response->templateName); self::assertSame('https://sp.example.test/acs',$response->params['acsUrl']); }
+ private function certificate():array { $key=openssl_pkey_new(['private_key_bits'=>2048,'private_key_type'=>OPENSSL_KEYTYPE_RSA]); $csr=openssl_csr_new(['commonName'=>'test'],$key); $cert=openssl_csr_sign($csr,null,$key,1); openssl_x509_export($cert,$pem); openssl_pkey_export($key,$private); return [$pem,$private]; }
+
 }
 }

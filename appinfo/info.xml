@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>saml_provider</id>
+    <name>SAML Provider</name>
+    <summary>Use Nextcloud as a SAML 2.0 Identity Provider (IdP)</summary>
+    <description><![CDATA[
+This app turns Nextcloud into a SAML 2.0 Identity Provider so external services
+(Service Providers) can authenticate against your Nextcloud user base via SSO.
+
+Features:
+* SAML 2.0 Web Browser SSO profile (HTTP-Redirect and HTTP-POST bindings)
+* SP-initiated and IdP-initiated SSO
+* Single Logout (SLO) endpoint
+* Signed AuthnResponses and Assertions (RSA-SHA256)
+* Optional verification of signed AuthnRequests per Service Provider
+* Per-Service-Provider configuration (ACS URL, EntityID, attribute mapping, NameID format)
+* IdP metadata endpoint for easy SP onboarding
+* App launcher page listing all enabled Service Providers for users
+]]></description>
+    <version>0.1.9</version>
+    <licence>mit</licence>
+    <author>SAML Provider for Nextcloud contributors</author>
+    <namespace>SAMLProvider</namespace>
+    <category>security</category>
+    <dependencies>
+        <nextcloud min-version="29" max-version="34"/>
+    </dependencies>
+    <settings>
+        <admin>OCA\SAMLProvider\Settings\Admin</admin>
+        <admin-section>OCA\SAMLProvider\Settings\AdminSection</admin-section>
+    </settings>
+    <navigations>
+        <navigation>
+            <name>SAML Provider</name>
+            <route>saml_provider.page.index</route>
+            <icon>app.svg</icon>
+        </navigation>
+    </navigations>
+</info>

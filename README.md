@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -23,6 +23,10 @@ Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External application
 - Per-service configuration: Entity ID, ACS URL, optional SLO URL, NameID format, attributes, and SP certificate
 - Optional validation of signed AuthnRequests for each service
 - Nextcloud administration interface and user-facing launcher
+
+## Development transparency
+
+This project was developed with assistance from **GPT 5.6 Terra by OpenAI**, including support for implementation, test coverage, CI/CD configuration, documentation, and release-process improvements. Human maintainers remain responsible for technical review, security assessment, testing, deployment decisions, and every published release.
 
 ## Requirements
 

@@ -1,0 +1,39 @@
+name: Kimai SAML end-to-end test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '11 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kimai-saml-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kimai-saml:
+    name: Nextcloud IdP and Kimai SP
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run Kimai SAML integration test
+        env:
+          NEXTCLOUD_IMAGE: nextcloud:34-apache
+          KIMAI_IMAGE: kimai/kimai2:apache
+          MARIADB_IMAGE: mariadb:11.4
+        run: bash tests/E2E/kimai-saml.sh
+      - name: Show container diagnostics
+        if: failure()
+        run: |
+          docker ps -a
+          for container in e2e-nextcloud e2e-kimai e2e-mariadb; do docker logs "$container" || true; done
+      - name: Remove containers
+        if: always()
+        run: |
+          docker rm --force e2e-nextcloud e2e-kimai e2e-mariadb 2>/dev/null || true
+          docker network rm saml-e2e 2>/dev/null || true

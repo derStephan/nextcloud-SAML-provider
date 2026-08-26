@@ -208,6 +208,10 @@ For Kimai-specific configuration and behavior, see the official [Kimai SAML docu
 - This IdP does not keep a server-side replay cache for issued assertions. Service Providers should validate `InResponseTo`, assertion IDs, timestamps, audience, recipient, and XML signatures, and reject replayed responses.
 - SP-initiated Single Logout is not implemented as a validated SAML LogoutRequest flow.
 
+## Automated Kimai integration test
+
+The `Kimai SAML end-to-end test` GitHub Actions workflow starts an isolated Nextcloud IdP, MariaDB, and Kimai SP with Docker. It verifies a fresh database migration, IdP metadata, Kimai SP metadata, and Kimai's ACS endpoint. It never uses release credentials, signing secrets, or the App Store publication path.
+
 ## Security notes
 
 - Use HTTPS everywhere.

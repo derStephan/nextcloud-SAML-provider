@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.5.3
+
+- Add meaningful regression coverage for malformed Redirect requests, persistent NameIDs, unsigned responses, custom attribute mappings, AuthnRequest signature-policy failures, anonymous SSO redirects, and inconsistent logged-in sessions.
+- Retain the complete `lib/` scope, the 80% required gate, and target a higher practical coverage margin.
+
 ## 0.5.2
 
 - Add authenticated SP-initiated SSO controller coverage, including the auto-post response path.

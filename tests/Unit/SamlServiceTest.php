@@ -74,6 +74,50 @@ final class SamlServiceTest extends TestCase {
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
         self::assertSame(2, $xpath->query('//ds:Signature')->length);
     }
+    public function testRejectsMalformedDeflateAndWrongRootRequests(): void {
+        foreach ([base64_encode('not-deflated'), base64_encode('<root/>')] as $request) {
+            try {
+                $this->service->parseAuthnRequest($request, $request === base64_encode('not-deflated') ? 'redirect' : 'post');
+                self::fail('Malformed request must be rejected');
+            } catch (\InvalidArgumentException) {
+                self::addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testBuildsPersistentNameIdAndUnsignedResponse(): void {
+        $sp = $this->provider();
+        $sp->setNameIdFormat('urn:oasis:names:tc:SAML:2.0:nameid-format:persistent');
+        $sp->setSignAssertions(false);
+        $sp->setAttributeMapping('{"department":"uid","unknown":"does-not-exist"}');
+        $xml = base64_decode($this->service->buildResponse($sp, new User('alice', null, 'Alice'), null, null), true);
+        self::assertNotFalse($xml);
+        self::assertStringContainsString('Name="department"', $xml);
+        self::assertStringNotContainsString('Name="unknown"', $xml);
+        self::assertStringNotContainsString('InResponseTo=', $xml);
+        self::assertSame(1, substr_count($xml, '<ds:Signature'));
+        self::assertStringNotContainsString('>alice</saml2:NameID>', $xml);
+    }
+
+    public function testSignaturePolicyRejectsMissingCertificateAndInvalidSignature(): void {
+        $sp = $this->provider();
+        $sp->setRequireSignedRequests(true);
+        $signature = $this->createMock(SignatureService::class);
+        $service = new SamlService($this->idp, $this->mapper, $signature, new NullLogger());
+        try {
+            $service->enforceRequestSignature(['rawXml' => '<request/>'], 'post', [], $sp);
+            self::fail('Missing certificate must be rejected');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('no SP certificate', $e->getMessage());
+        }
+        [$cert] = $this->newCertificate();
+        $sp->setSpCertificate($cert);
+        $signature->method('spCanSign')->willReturn(true);
+        $signature->method('verifyPostSignature')->willReturn(false);
+        $this->expectException(\RuntimeException::class);
+        $service->enforceRequestSignature(['rawXml' => '<request/>'], 'post', [], $sp);
+    }
+
     private function provider(): ServiceProvider { $sp = new ServiceProvider(); $sp->setId(1); $sp->setSpEntityId('https://sp.example.test/metadata'); $sp->setSpName('Example SP'); $sp->setAcsUrl('https://sp.example.test/acs'); $sp->setSignAssertions(true); $sp->setIsEnabled(true); return $sp; }
     /** @return array{string,string} */ private function newCertificate(): array { $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]); self::assertNotFalse($key); $csr = openssl_csr_new(['commonName' => 'test'], $key); $cert = openssl_csr_sign($csr, null, $key, 1); openssl_x509_export($cert, $certPem); openssl_pkey_export($key, $keyPem); return [$certPem, $keyPem]; }
 }

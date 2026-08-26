@@ -98,6 +98,29 @@ final class SamlControllerTest extends TestCase {
         self::assertSame('/after', $response->params['relayState']);
     }
 
+    public function testSsoRedirectsAnonymousUserAfterValidRequest(): void {
+        $sp = new ServiceProvider();
+        $sp->setAcsUrl('https://sp.example.test/acs');
+        $service = $this->createMock(SamlService::class);
+        $service->method('parseAuthnRequest')->willReturn(['id' => '_id', 'issuer' => 'sp', 'acsUrl' => null, 'nameIdPolicy' => null, 'rawXml' => '<request/>']);
+        $service->method('resolveServiceProvider')->willReturn($sp);
+        $request = new Request(['SAMLRequest' => 'request'], 'GET', ['QUERY_STRING' => 'SAMLRequest=request']);
+        $response = $this->controller($request, new Session(), $service)->sso();
+        self::assertSame(302, $response->status);
+        self::assertStringContainsString('core.login.showLoginForm', $response->redirectURL);
+    }
+
+    public function testSsoReturnsUnauthorizedWhenSessionHasNoUser(): void {
+        $sp = new ServiceProvider();
+        $sp->setAcsUrl('https://sp.example.test/acs');
+        $service = $this->createMock(SamlService::class);
+        $service->method('parseAuthnRequest')->willReturn(['id' => '_id', 'issuer' => 'sp', 'acsUrl' => null, 'nameIdPolicy' => null, 'rawXml' => '<request/>']);
+        $service->method('resolveServiceProvider')->willReturn($sp);
+        $session = new Session(null);
+        $session->loggedIn = true;
+        self::assertSame(401, $this->controller(new Request(['SAMLRequest' => 'request']), $session, $service)->sso()->status);
+    }
+
     public function testIdpInitiatedBuildsPostResponseForLoggedInUser(): void {
         $sp = new ServiceProvider();
         $sp->setAcsUrl('https://sp.example.test/acs');

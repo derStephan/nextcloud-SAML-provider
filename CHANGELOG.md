@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
+
+## 0.1.25
+
+- Add a GitHub Release-downloads badge to the README.
+- Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
+
+## [Unreleased]
+
+### Added
+
+- Documentation and repository files required for public App Store submission.
+- Automated unit, coverage, and Nextcloud integration test workflows.
+
+## [0.1.22]
+
+### Added
+
+- Public-release metadata and App Store description.
+
+### Fixed
+
+- SAML response persistence, CSP handling, XML signature generation, and XML signature validation compatibility issues.
+
+[Unreleased]: https://github.com/derStephan/nextcloud-SAML-provider/compare/v0.1.22...HEAD
+[0.1.22]: https://github.com/derStephan/nextcloud-SAML-provider/releases/tag/v0.1.22

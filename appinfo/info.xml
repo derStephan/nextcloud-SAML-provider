@@ -3,26 +3,47 @@
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>saml_provider</id>
     <name>SAML Provider</name>
-    <summary>Use Nextcloud as a SAML 2.0 Identity Provider (IdP)</summary>
-    <description><![CDATA[
-This app turns Nextcloud into a SAML 2.0 Identity Provider so external services
-(Service Providers) can authenticate against your Nextcloud user base via SSO.
+    <summary>Use Nextcloud as a SAML 2.0 Identity Provider</summary>
+    <description lang="en"><![CDATA[
+# SAML Provider for Nextcloud
 
-Features:
-* SAML 2.0 Web Browser SSO profile (HTTP-Redirect and HTTP-POST bindings)
-* SP-initiated and IdP-initiated SSO
-* Single Logout (SLO) endpoint
-* Signed AuthnResponses and Assertions (RSA-SHA256)
-* Optional verification of signed AuthnRequests per Service Provider
-* Per-Service-Provider configuration (ACS URL, EntityID, attribute mapping, NameID format)
-* IdP metadata endpoint for easy SP onboarding
-* App launcher page listing all enabled Service Providers for users
+Use your Nextcloud accounts to sign in to external SAML 2.0 compatible services.
+
+## Features
+
+- Service Provider initiated single sign-on (SSO)
+- Identity Provider initiated login from a user-facing launcher
+- Signed SAML Responses and Assertions using RSA-SHA256
+- Metadata endpoint for straightforward service onboarding
+- Per-service Entity ID, ACS URL, NameID format, attributes, and certificate settings
+- Optional verification of signed AuthnRequests
+
+## Requirements
+
+- Nextcloud 33 or later
+- HTTPS for Nextcloud and connected services
+- PHP OpenSSL and DOM extensions
+
+## Getting started
+
+1. Open **Administration settings → SAML Provider**.
+2. Generate the IdP signing certificate.
+3. Register the displayed metadata URL with your SAML-compatible service, or enter the Entity ID, SSO URL, and public certificate manually.
+4. Add that service's Entity ID and ACS URL as a connected service.
+5. Test login before disabling a local login method in the connected service.
+
+The app sends `uid`, `displayName`, and `mail` attributes when they are available in the Nextcloud user profile.
+
+See the project README for setup instructions, a complete Kimai example, security guidance, and limitations.
 ]]></description>
-    <version>0.1.21</version>
-    <licence>mit</licence>
-    <author>SAML Provider for Nextcloud contributors</author>
+    <version>0.1.25</version>
+    <licence>MIT</licence>
+    <author homepage="https://github.com/derStephan">derStephan</author>
     <namespace>SAMLProvider</namespace>
-    <category>security</category>
+    <category>integration</category>
+    <website>https://github.com/derStephan/nextcloud-SAML-provider</website>
+    <bugs>https://github.com/derStephan/nextcloud-SAML-provider/issues</bugs>
+    <repository>https://github.com/derStephan/nextcloud-SAML-provider.git</repository>
     <dependencies>
         <nextcloud min-version="33"/>
     </dependencies>

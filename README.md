@@ -1,5 +1,15 @@
 # SAML Provider for Nextcloud
 
+[![Unit tests](https://github.com/derStephan/nextcloud-SAML-provider/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/derStephan/nextcloud-SAML-provider/actions/workflows/tests.yml)
+[![Nextcloud integration tests](https://github.com/derStephan/nextcloud-SAML-provider/actions/workflows/nextcloud-integration.yml/badge.svg?branch=main)](https://github.com/derStephan/nextcloud-SAML-provider/actions/workflows/nextcloud-integration.yml)
+[![Code coverage](https://codecov.io/gh/derStephan/nextcloud-SAML-provider/graph/badge.svg?branch=main)](https://codecov.io/gh/derStephan/nextcloud-SAML-provider)
+[![GitHub release downloads](https://img.shields.io/github/downloads/derStephan/nextcloud-SAML-provider/total)](https://github.com/derStephan/nextcloud-SAML-provider/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<!-- NEXTCLOUD_COMPATIBILITY:START -->
+**Tested Nextcloud compatibility:** 33 or later
+<!-- NEXTCLOUD_COMPATIBILITY:END -->
+
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
 
 > This project implements the SAML 2.0 Web Browser SSO profile. Review the [Security notes](#security-notes) before using it in production.
@@ -16,7 +26,7 @@ Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External application
 
 ## Requirements
 
-- Nextcloud 33 or later
+- Nextcloud versions declared in `appinfo/info.xml` and verified by the integration workflow
 - PHP with the OpenSSL and DOM extensions enabled
 - HTTPS for Nextcloud and every connected service
 - An administrator account
@@ -212,6 +222,14 @@ Not implemented:
 - Attribute Query
 - Service Provider-initiated and propagated Single Logout requests
 - Per-service assertion encryption
+
+## App Store and releases
+
+The App Store listing is generated from the metadata in `appinfo/info.xml`, including the summary, long description, license, supported Nextcloud versions, repository URL, issue tracker URL, and author.
+
+The **Release app** workflow automates patch releases after successful **Unit tests** and **Nextcloud integration tests** on `main`. It updates the patch version, derives the Nextcloud `min-version` and `max-version` from the green stable integration matrix, signs the final archive, creates a GitHub Release, and publishes the archive to the Nextcloud App Store. A scheduled matrix check publishes only when the supported stable Nextcloud range changes. Release signing material is available exclusively to the protected `release` environment.
+
+Manual recovery and first-release steps are documented in [docs/APP_STORE_RELEASE.md](docs/APP_STORE_RELEASE.md).
 
 ## License
 

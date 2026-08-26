@@ -50,3 +50,9 @@ jobs:
           coverage: xdebug
       - run: composer install --no-interaction --prefer-dist
       - run: composer test:coverage
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage/clover.xml
+          fail_ci_if_error: false
+          verbose: true

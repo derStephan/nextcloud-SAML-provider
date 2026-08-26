@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.6.4
+
+- Fix full Kimai SSO test workspace writes: run the temporary HTTP client with the GitHub runner's numeric UID/GID so its shared cookie jar, headers, and response files are writable on the bind-mounted E2E directory.
+
 ## 0.6.3
 
 - Correct the Nextcloud API contract test for dynamic `Entity` accessors: verify `ServiceProvider::setId()`/`getId()` behavior in each real matrix container through Nextcloud's `Entity::__call()` mechanism instead of requiring a non-declared base-class method.

@@ -270,7 +270,7 @@ The test installs and enables the app in an ephemeral Nextcloud instance, checks
 
 This is a full protocol-level HTTP test: it validates redirects, cookies, the real Nextcloud login form, AuthnRequest parsing, SP lookup, signed SAML POST binding, Kimai ACS validation, and SAML-user import. It deliberately does not assert visual rendering or JavaScript behavior, which are separate UI concerns.
 
-All containers, the temporary network, test certificates, database, and configuration are discarded after the run. The workflow receives no release credentials, signing keys, or App Store token. On failure it prints container diagnostics before cleanup.
+All containers, the temporary network, test certificates, database, browser-session files, and configuration are discarded after the run. The temporary HTTP client runs with the CI runner's numeric UID/GID solely to write its cookie jar and response captures into the bind-mounted ephemeral test directory. The workflow receives no release credentials, signing keys, or App Store token. On failure it prints container diagnostics before cleanup.
 
 ### Releases and App Store publication
 

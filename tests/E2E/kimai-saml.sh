@@ -77,7 +77,9 @@ status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent -
 # Nextcloud login -> signed POST binding -> Kimai ACS -> database user import.
 e2e_dir="$workspace/build/e2e"; cookies="$e2e_dir/browser-cookies.txt"
 rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login-submit,acs}.headers "$e2e_dir"/{login,saml-response,acs}.html
-http() { docker run --rm --network "$network" --volume "$e2e_dir:/work" curlimages/curl:8.10.1 "$@"; }
+# Use the runner numeric UID/GID so cookie, header and response files are writable
+# in the shared E2E workspace bind mount on hosted and self-hosted runners alike.
+http() { docker run --rm --user "$(id -u):$(id -g)" --network "$network" --volume "$e2e_dir:/work" curlimages/curl:8.10.1 "$@"; }
 location() { sed -n 's/^[Ll]ocation: *\(.*\)\r*$/\1/p' "$1" | tail -n 1 | tr -d '\r'; }
 absolute_url() { case "$1" in http://*|https://*) printf '%s' "$1" ;; /*) printf '%s%s' "$2" "$1" ;; *) printf '%s/%s' "$2" "$1" ;; esac; }
 

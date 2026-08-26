@@ -7,7 +7,7 @@ declare(strict_types=1);
  */
 namespace OCP {
     interface IAppConfig { public function getValueString(string $app, string $key, string $default = '', bool $lazy = false): string; public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): void; }
-    interface IURLGenerator { public function getAbsoluteURL(string $url): string; public function linkToRouteAbsolute(string $route, array $params = []): string; public function linkTo(string $app, string $file): string; public function getBaseUrl(): string; }
+    interface IURLGenerator { public function getAbsoluteURL(string $url): string; public function linkToRouteAbsolute(string $route, array $params = []): string; public function linkTo(string $app, string $file): string; public function getBaseUrl(): string; public function imagePath(string $app, string $file): string; }
     interface IUser { public function getUID(): string; public function getEMailAddress(): ?string; public function getDisplayName(): string; }
 }
 namespace OCP\AppFramework { class App { public function __construct(string $appName, array $urlParams = []) {} } }

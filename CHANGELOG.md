@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.5.2
+
+- Add authenticated SP-initiated SSO controller coverage, including the auto-post response path.
+- Add direct coverage for the administration section metadata and icon.
+
 ## 0.5.1
 
 - Fix the SAML controller PHPUnit test syntax by rewriting the expanded test class with correctly scoped methods and braces.

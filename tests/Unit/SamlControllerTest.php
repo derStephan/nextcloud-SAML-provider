@@ -81,6 +81,23 @@ final class SamlControllerTest extends TestCase {
         self::assertSame('https://sp.example.test/after', $response->redirectURL);
     }
 
+    public function testSsoBuildsPostResponseForLoggedInUser(): void {
+        $sp = new ServiceProvider();
+        $sp->setAcsUrl('https://sp.example.test/acs');
+        $service = $this->createMock(SamlService::class);
+        $service->method('parseAuthnRequest')->willReturn(['id' => '_request', 'issuer' => 'https://sp.example.test/meta', 'acsUrl' => null, 'nameIdPolicy' => null, 'rawXml' => '<request/>']);
+        $service->method('resolveServiceProvider')->willReturn($sp);
+        $service->expects(self::once())->method('enforceRequestSignature');
+        $service->method('buildResponse')->willReturn('encoded-response');
+        $session = new Session(new User());
+        $session->loggedIn = true;
+        $request = new Request(['SAMLRequest' => 'encoded-request', 'RelayState' => '/after'], 'GET', ['QUERY_STRING' => 'SAMLRequest=encoded-request']);
+        $response = $this->controller($request, $session, $service)->sso();
+        self::assertSame('post_response', $response->templateName);
+        self::assertSame('https://sp.example.test/acs', $response->params['acsUrl']);
+        self::assertSame('/after', $response->params['relayState']);
+    }
+
     public function testIdpInitiatedBuildsPostResponseForLoggedInUser(): void {
         $sp = new ServiceProvider();
         $sp->setAcsUrl('https://sp.example.test/acs');

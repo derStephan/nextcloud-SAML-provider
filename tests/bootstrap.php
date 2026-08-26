@@ -21,8 +21,11 @@ namespace OCP\AppFramework\Db {
         /** @var array<string, string> */ protected array $types = [];
         public function addType(string $field, string $type): void { $this->types[$field] = $type; }
         public function markFieldUpdated(string $field): void { $this->updatedFields[$field] = true; }
-        public function getId(): ?int { return $this->id; }
-        public function setId(int $id): void { $this->id = $id; }
+        public function __call(string $name, array $arguments): mixed {
+            if ($name === 'getId' && $arguments === []) { return $this->id; }
+            if ($name === 'setId' && count($arguments) === 1) { $this->id = (int)$arguments[0]; return null; }
+            throw new \BadMethodCallException("Unknown entity method: $name");
+        }
         /** @return list<string> */ public function getUpdatedFields(): array { return array_keys($this->updatedFields); }
     }
     class QBMapper {}

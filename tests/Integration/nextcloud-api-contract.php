@@ -27,7 +27,7 @@ $contracts = [
     'OCP\\Settings\\IIconSection' => ['getID', 'getName', 'getPriority', 'getIcon'],
     'OCP\\AppFramework\\App' => ['__construct'],
     'OCP\\AppFramework\\Controller' => ['__construct'],
-    'OCP\\AppFramework\\Db\\Entity' => ['addType', 'markFieldUpdated', 'getId'],
+    'OCP\\AppFramework\\Db\\Entity' => ['addType', 'markFieldUpdated', '__call'],
     'OCP\\AppFramework\\Db\\QBMapper' => ['__construct', 'findEntity', 'findEntities', 'getTableName'],
     'OCP\\AppFramework\\Http\\TemplateResponse' => ['__construct', 'setContentSecurityPolicy'],
     'OCP\\AppFramework\\Http\\DataResponse' => ['__construct'],
@@ -69,6 +69,19 @@ if (!defined('OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_INT')
     || !defined('OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_BOOL')
     || !defined('OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_STR')) {
     $missing[] = 'missing IQueryBuilder parameter constant';
+}
+// Entity accessors such as getId()/setId() are intentionally dynamic in
+// Nextcloud's Entity base class. Test the concrete production entity at runtime rather
+// than incorrectly requiring method_exists(Entity::class, 'getId').
+$entityClass = 'OCA\\SAMLProvider\\Db\\ServiceProvider';
+if (!class_exists($entityClass)) {
+    $missing[] = "missing app entity: $entityClass";
+} else {
+    $entity = new $entityClass();
+    $entity->setId(4242);
+    if ($entity->getId() !== 4242) {
+        $missing[] = 'Entity dynamic getId()/setId() contract failed';
+    }
 }
 if ($missing !== []) {
     fwrite(STDERR, "Nextcloud public API contract mismatch:\n- " . implode("\n- ", $missing) . "\n");

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.6.3
+
+- Correct the Nextcloud API contract test for dynamic `Entity` accessors: verify `ServiceProvider::setId()`/`getId()` behavior in each real matrix container through Nextcloud's `Entity::__call()` mechanism instead of requiring a non-declared base-class method.
+- Align the unit-test Entity double with that dynamic accessor behavior, preventing it from exposing a wider fake Entity API than production.
+
 ## 0.6.2
 
 - Fix the full Kimai E2E setup to use the positional value argument required by `occ user:setting`.

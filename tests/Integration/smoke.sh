@@ -24,6 +24,9 @@ done
 docker exec --user www-data "$container" php occ maintenance:install --database sqlite --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data
 docker exec --user www-data "$container" php occ app:enable saml_provider
 docker exec --user www-data "$container" php occ app:list --output=json | grep -q '"saml_provider"'
+# Execute inside the selected real Nextcloud image. This contract covers every
+# dynamically discovered supported stable version and any current RC/beta matrix entry.
+docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/nextcloud-api-contract.php
 
 metadata_url="$base_url/apps/saml_provider/saml/metadata"
 metadata_status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$metadata_url")"

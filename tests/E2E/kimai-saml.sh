@@ -28,7 +28,7 @@ docker exec --user www-data "$nextcloud" php occ config:system:set overwrite.cli
 docker exec --user www-data "$nextcloud" php occ config:system:set trusted_domains 1 --value=e2e-nextcloud >/dev/null
 docker exec --user www-data "$nextcloud" php occ app:enable saml_provider >/dev/null
 # Kimai requires an Email assertion attribute; all values are ephemeral test data.
-docker exec --user www-data "$nextcloud" php occ user:setting admin settings email --value=admin@example.test >/dev/null
+docker exec --user www-data "$nextcloud" php occ user:setting admin settings email admin@example.test >/dev/null
 docker exec --user www-data "$nextcloud" php -r '
 $db = new PDO("sqlite:/var/www/html/data/nextcloud.db");
 $name = $db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"oc_saml_provider_sp\"")->fetchColumn();

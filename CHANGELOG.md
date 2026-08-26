@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.6.2
+
+- Fix the full Kimai E2E setup to use the positional value argument required by `occ user:setting`.
+- Add a real Nextcloud public-API contract test to every dynamically selected integration-matrix image, covering supported stable releases and available RC/beta versions so local unit-test doubles cannot mask OCP API drift.
+
+## 0.6.1
+
+- Harden RelayState handling: absolute redirect targets now require an exact allowed origin, including scheme and effective port, rather than only a matching hostname.
+- Reject browser-ambiguous backslash paths and control characters in RelayState, with regression tests for HTTPS downgrade and alternate-port redirects.
+
 ## 0.6.0
 
 - Upgrade the mandatory Kimai Docker workflow to a full SP-initiated SSO regression test: AuthnRequest, Nextcloud login, signed POST binding, Kimai ACS validation, and MariaDB-backed SAML-user provisioning.
@@ -157,15 +167,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.5.9] - 2026-08-26
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

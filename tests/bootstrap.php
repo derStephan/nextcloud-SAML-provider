@@ -2,8 +2,10 @@
 declare(strict_types=1);
 
 /*
- * Lightweight OCP test doubles keep these unit tests runnable outside a full
- * Nextcloud installation. Production code still uses the real OCP interfaces.
+ * Lightweight OCP test doubles keep unit tests runnable outside a full Nextcloud
+ * installation. They model only methods exercised by a test and are not an API
+ * authority. tests/Integration/nextcloud-api-contract.php verifies the production
+ * OCP surface inside every dynamically selected real Nextcloud Docker version.
  */
 namespace OCP {
     interface IAppConfig { public function getValueString(string $app, string $key, string $default = '', bool $lazy = false): string; public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): void; }

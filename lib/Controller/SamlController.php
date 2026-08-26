@@ -171,42 +171,60 @@ class SamlController extends Controller {
     }
 
     /**
-     * Prevents Open Redirect Vulnerabilities.
-     * Allows redirect only to local Nextcloud paths or domains of registered Service Providers.
+     * Prevents open redirects in RelayState.
+     *
+     * A relative path stays on this Nextcloud instance. Absolute URLs must have the
+     * exact same origin (scheme, host, and effective port) as Nextcloud or a registered
+     * ACS/SLO endpoint. Comparing only a host would allow an HTTPS-to-HTTP downgrade or
+     * a redirect to a different service listening on the same host and another port.
      */
     private function isSafeRedirectUrl(string $url): bool {
-        // Local path
-        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
-            return true;
-        }
-
-        $targetHost = parse_url($url, PHP_URL_HOST);
-        if ($targetHost === null) {
+        // Reject control characters and browser-ambiguous backslash paths up front.
+        if (preg_match('/[\x00-\x1F\x7F]/', $url) === 1) {
             return false;
         }
-
-        // Compare with Nextcloud Host
-        $ncBase = $this->urlGenerator->getAbsoluteURL('/');
-        $ncHost = parse_url($ncBase, PHP_URL_HOST);
-        if ($ncHost !== null && strcasecmp($targetHost, $ncHost) === 0) {
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_starts_with($url, '/\\')) {
             return true;
         }
 
-        // Compare with all registered Service Providers ACS/SLO hosts
-        $sps = $this->spMapper->findAllEnabled();
-        foreach ($sps as $sp) {
-            $spHost = parse_url($sp->getAcsUrl(), PHP_URL_HOST);
-            if ($spHost !== null && strcasecmp($targetHost, $spHost) === 0) {
-                return true;
-            }
-            if ($sp->getSloUrl() !== '') {
-                $spSloHost = parse_url($sp->getSloUrl(), PHP_URL_HOST);
-                if ($spSloHost !== null && strcasecmp($targetHost, $spSloHost) === 0) {
-                    return true;
-                }
-            }
+        $targetOrigin = $this->originOf($url);
+        if ($targetOrigin === null) {
+            return false;
+        }
+        if ($targetOrigin === $this->originOf($this->urlGenerator->getAbsoluteURL('/'))) {
+            return true;
         }
 
+        foreach ($this->spMapper->findAllEnabled() as $sp) {
+            if ($targetOrigin === $this->originOf($sp->getAcsUrl())) {
+                return true;
+            }
+            $sloUrl = $sp->getSloUrl();
+            if ($sloUrl !== null && $sloUrl !== '' && $targetOrigin === $this->originOf($sloUrl)) {
+                return true;
+            }
+        }
         return false;
+    }
+
+    /** @return string|null Normalized http(s) origin, including its effective port. */
+    private function originOf(string $url): ?string {
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+        $scheme = strtolower($parts['scheme']);
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            return null;
+        }
+        $host = strtolower($parts['host']);
+        $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
+        if ($host === '' || $port < 1 || $port > 65535) {
+            return null;
+        }
+        return $scheme . '://' . $host . ':' . $port;
     }
 }

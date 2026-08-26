@@ -81,6 +81,17 @@ final class SamlControllerTest extends TestCase {
         self::assertSame('https://sp.example.test/after', $response->redirectURL);
     }
 
+    public function testSloRequiresExactRegisteredOrigin(): void {
+        $sp = new ServiceProvider();
+        $sp->setAcsUrl('https://sp.example.test/acs');
+        $this->mapper->enabled = [$sp];
+        $controller = $this->controller(new Request(['RelayState' => 'https://sp.example.test:443/after']), new Session());
+        self::assertSame('https://sp.example.test:443/after', $controller->slo()->redirectURL);
+        self::assertSame('/', $this->controller(new Request(['RelayState' => 'http://sp.example.test/after']), new Session())->slo()->redirectURL);
+        self::assertSame('/', $this->controller(new Request(['RelayState' => 'https://sp.example.test:8443/after']), new Session())->slo()->redirectURL);
+        self::assertSame('/', $this->controller(new Request(['RelayState' => '/\\evil.test']), new Session())->slo()->redirectURL);
+    }
+
     public function testSsoBuildsPostResponseForLoggedInUser(): void {
         $sp = new ServiceProvider();
         $sp->setAcsUrl('https://sp.example.test/acs');

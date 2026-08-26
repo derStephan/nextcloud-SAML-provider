@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -250,6 +250,8 @@ After the unit-test workflow succeeds, the integration workflow discovers suppor
 
 Container and application logs are printed if a smoke test fails, and the container is removed in all cases.
 
+Before endpoint checks, each matrix container also runs `tests/Integration/nextcloud-api-contract.php` **inside the selected Nextcloud image**. It verifies the exact public OCP interfaces, methods, constants, base classes, response classes, migration types, and attributes used by production code. Because the version matrix is discovered dynamically, this check covers every current supported stable release and any available RC/beta image — not merely Nextcloud 33 or the local unit-test doubles. A removed or renamed framework API therefore blocks the integration stage before Kimai or release.
+
 ### Kimai SAML end-to-end test
 
 After all Nextcloud matrix jobs are green, the `Kimai SAML end-to-end test` launches a private Docker network containing:
@@ -293,6 +295,7 @@ The App Store listing itself is generated from `appinfo/info.xml`, including sum
 - SAML Responses and Assertions expire after five minutes.
 - The IdP private key is stored as a sensitive Nextcloud app configuration value. Protect Nextcloud configuration and database backups accordingly.
 - Enable signed AuthnRequests where the Service Provider supports them.
+- RelayState redirects are restricted to local paths or the exact scheme/host/port origin of a configured service endpoint.
 - Test with a non-administrator account before enabling SAML-only login at any connected service.
 - Regenerating the IdP certificate invalidates trust at every Service Provider until its configuration is updated.
 

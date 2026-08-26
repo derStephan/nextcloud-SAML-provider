@@ -237,6 +237,8 @@ Generate a Clover report and enforce the line-coverage gate:
 XDEBUG_MODE=coverage composer test:coverage
 ```
 
-The coverage command writes `build/coverage/clover.xml` and fails when line coverage is below **80%**. The GitHub Actions workflow runs this gate for supported PHP versions.
+The coverage command writes `build/coverage/clover.xml` and fails when line coverage is below **80%**.
+
+The GitHub Actions workflow discovers the PHP versions that are currently supported upstream at the beginning of every run, then tests each of them. It includes releases that still receive security fixes and updates automatically when PHP support status changes. The workflow also runs weekly to detect a newly supported release without requiring a code change. Lifecycle data is obtained from the [endoflife.date PHP API](https://endoflife.date/php), which tracks the upstream PHP support schedule.
 
 The test bootstrap intentionally loads `tests/Support/TestDoubles.php`, which contains lightweight test-only implementations of the Nextcloud interfaces needed for isolated unit tests. This allows the suite to run without a complete Nextcloud server installation.

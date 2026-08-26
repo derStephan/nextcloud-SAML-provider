@@ -1,46 +1,64 @@
 name: Nextcloud integration tests
+
 on:
   push:
   pull_request:
   schedule:
     - cron: '43 6 * * 1'
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
-  supported-nextcloud-versions:
-    name: Discover supported Nextcloud versions
+  nextcloud-versions:
+    name: Discover Nextcloud releases
     runs-on: ubuntu-latest
     outputs:
-      versions: ${{ steps.versions.outputs.versions }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - id: versions
-        name: Build Nextcloud version matrix
+      - id: matrix
+        name: Build stable and beta matrix
         shell: bash
         run: |
           set -euo pipefail
-          versions="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$"))] | map(tonumber) | sort | map(tostring)')"
-          if [[ "$versions" == "[]" ]]; then echo "No supported Nextcloud versions were returned." >&2; exit 1; fi
-          echo "Testing supported Nextcloud versions: $versions"
-          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+
+          # Stable entries are all currently security-supported Nextcloud majors.
+          # The official beta-apache image follows the current pre-release channel
+          # and therefore covers the next major release without a hard-coded number.
+          matrix="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error \
+            https://endoflife.date/api/nextcloud.json \
+            | jq --compact-output --arg today "$(date -u +%F)" \
+              '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | {label: ., image: ("nextcloud:" + . + "-apache")}]
+               | sort_by(.label | tonumber)
+               + [{label: "beta", image: "nextcloud:beta-apache"}]')"
+
+          if [[ "$matrix" == "[]" ]]; then
+            echo "No supported Nextcloud versions were returned." >&2
+            exit 1
+          fi
+
+          echo "Testing Nextcloud matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   integration:
-    name: Nextcloud ${{ matrix.nextcloud }}
-    needs: supported-nextcloud-versions
+    name: Nextcloud ${{ matrix.target.label }}
+    needs: nextcloud-versions
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        nextcloud: ${{ fromJSON(needs.supported-nextcloud-versions.outputs.versions) }}
+        target: ${{ fromJSON(needs.nextcloud-versions.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
       - name: Start Nextcloud
-        run: docker run --detach --name nextcloud-under-test --publish 8080:80 --volume "$GITHUB_WORKSPACE:/var/www/html/custom_apps/saml_provider:ro" "nextcloud:${{ matrix.nextcloud }}-apache"
+        run: docker run --detach --name nextcloud-under-test --publish 8080:80 --volume "$GITHUB_WORKSPACE:/var/www/html/custom_apps/saml_provider:ro" "${{ matrix.target.image }}"
       - name: Run integration smoke test
         env:
           NEXTCLOUD_CONTAINER: nextcloud-under-test
           NEXTCLOUD_URL: http://127.0.0.1:8080
-          NEXTCLOUD_VERSION: ${{ matrix.nextcloud }}
-        run: tests/Integration/smoke.sh
+          NEXTCLOUD_VERSION: ${{ matrix.target.label }}
+        run: bash tests/Integration/smoke.sh
       - name: Show Nextcloud logs on failure
         if: failure()
         run: docker logs nextcloud-under-test

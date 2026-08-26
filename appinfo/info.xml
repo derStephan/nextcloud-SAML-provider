@@ -18,7 +18,7 @@ Features:
 * IdP metadata endpoint for easy SP onboarding
 * App launcher page listing all enabled Service Providers for users
 ]]></description>
-    <version>0.1.9</version>
+    <version>0.1.10</version>
     <licence>mit</licence>
     <author>SAML Provider for Nextcloud contributors</author>
     <namespace>SAMLProvider</namespace>

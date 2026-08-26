@@ -4,8 +4,10 @@ namespace OCA\SAMLProvider\Tests\Unit;
 use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Service\SignatureService;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 #[CoversClass(SignatureService::class)]
+#[UsesClass(ServiceProvider::class)]
 final class SignatureServiceTest extends TestCase {
     public function testVerifiesValidRedirectSignatureAndRejectsTampering(): void {
         [$certificate, $privateKey] = $this->newCertificate();

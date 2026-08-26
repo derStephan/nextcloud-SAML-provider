@@ -36,4 +36,7 @@ namespace OCA\SAMLProvider\Db {
         public function anyRequiresSignedRequests(): bool { return $this->requiresSignedRequests; }
     }
 }
-namespace { require_once __DIR__ . '/../vendor/autoload.php'; }
+namespace {
+    require_once __DIR__ . '/../vendor/autoload.php';
+    require_once __DIR__ . '/Support/TestDoubles.php';
+}

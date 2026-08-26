@@ -156,15 +156,22 @@ class SignatureService {
             'string(ds:SignedInfo/ds:Reference/ds:DigestValue)', $sigNode
         ));
 
-        // Clone element to prevent mutations affecting other parsers
-        $clonedRoot = $root->cloneNode(true);
-        // Find signature node inside cloned root and remove it
-        $clonedXpath = new \DOMXPath($clonedRoot->ownerDocument);
+        // Clone into its own document before applying the enveloped-signature
+        // transform. A cloneNode() keeps the original owner document; querying that
+        // document can return the original Signature node, which must never be
+        // removed from the cloned element.
+        $cloneDocument = new \DOMDocument();
+        $cloneDocument->preserveWhiteSpace = true;
+        $clonedRoot = $cloneDocument->importNode($root, true);
+        $cloneDocument->appendChild($clonedRoot);
+        $clonedXpath = new \DOMXPath($cloneDocument);
         $clonedXpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
-        $clonedXpath->registerNamespace('samlp', 'urn:oasis:names:tc:SAML:2.0:protocol');
         $clonedSigNodes = $clonedXpath->query('/samlp:AuthnRequest/ds:Signature');
         if ($clonedSigNodes !== false && $clonedSigNodes->length === 1) {
-            $clonedRoot->removeChild($clonedSigNodes->item(0));
+            $signatureToRemove = $clonedSigNodes->item(0);
+            if ($signatureToRemove !== null && $signatureToRemove->parentNode === $clonedRoot) {
+                $clonedRoot->removeChild($signatureToRemove);
+            }
         }
 
         $actualDigest = base64_encode(match ($digestAlg) {

@@ -16,6 +16,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-08-26
+
+### Changed
+
+- Automated release after successful quality checks.
+- Tested stable Nextcloud compatibility range: 33 through 34.
+- Release trigger: push.
+
+
 ## [0.1.26] - 2026-08-26
 
 ### Changed

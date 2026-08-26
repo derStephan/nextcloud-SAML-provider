@@ -18,26 +18,27 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - id: matrix
-        name: Build stable and beta matrix
+        name: Build stable and pre-release matrix
         shell: bash
         run: |
           set -euo pipefail
 
-          # Stable entries are all currently security-supported Nextcloud majors.
-          # The official beta-apache image follows the current pre-release channel
-          # and therefore covers the next major release without a hard-coded number.
-          matrix="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error \
-            https://endoflife.date/api/nextcloud.json \
-            | jq --compact-output --arg today "$(date -u +%F)" \
-              '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | {label: ., image: ("nextcloud:" + . + "-apache")}]
-               | sort_by(.label | tonumber)
-               + [{label: "beta", image: "nextcloud:beta-apache"}]')"
+          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | {label: ., image: ("nextcloud:" + . + "-apache")} ] | sort_by(.label | tonumber)')"
 
-          if [[ "$matrix" == "[]" ]]; then
-            echo "No supported Nextcloud versions were returned." >&2
-            exit 1
+          # Docker Hub's generic beta tag is historical and unsuitable. Discover the
+          # newest explicit release-candidate or beta Apache tag instead, e.g.
+          # 35.0.0RC1-apache. If no pre-release image is published, test only stable
+          # releases rather than silently using an unrelated legacy image.
+          prerelease="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error 'https://hub.docker.com/v2/repositories/library/nextcloud/tags?ordering=last_updated&page_size=100' | jq --compact-output '[.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+((RC|rc)[0-9]+|(beta|Beta)[0-9]+)-apache$")) | {label: ("pre-release " + .name), image: ("nextcloud:" + .name)}] | first // empty')"
+
+          if [[ -n "$prerelease" && "$prerelease" != "null" ]]; then
+            matrix="$(jq --compact-output --argjson prerelease "$prerelease" '. + [$prerelease]' <<< "$stable")"
+          else
+            matrix="$stable"
+            echo "No current Nextcloud RC/beta Apache image found; testing stable majors only."
           fi
 
+          if [[ "$matrix" == "[]" ]]; then echo "No supported Nextcloud versions were returned." >&2; exit 1; fi
           echo "Testing Nextcloud matrix: $matrix"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 

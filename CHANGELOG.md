@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.5.1
+
+- Fix the SAML controller PHPUnit test syntax by rewriting the expanded test class with correctly scoped methods and braces.
+
 ## 0.5.0
 
 - Expand direct controller coverage for successful metadata, IdP-initiated SSO, registered-SP logout, duplicate SP prevention, valid updates, organization persistence, and certificate generation.

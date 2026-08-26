@@ -1,7 +1,7 @@
 name: Release app
 on:
   workflow_run:
-    workflows: ["Nextcloud integration tests"]
+    workflows: ["Kimai SAML end-to-end test"]
     types: [completed]
 permissions:
   contents: write
@@ -32,22 +32,6 @@ jobs:
           else
             echo "current=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Wait for matching unit tests
-        if: steps.current.outputs.current == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 30); do
-            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/tests.yml/runs?head_sha=${HEAD_SHA}&per_page=20")"
-            successful="$(jq '[.workflow_runs[] | select(.conclusion == "success")] | length' <<< "$runs")"
-            pending="$(jq '[.workflow_runs[] | select(.status != "completed")] | length' <<< "$runs")"
-            if (( successful > 0 )); then exit 0; fi
-            if (( pending == 0 )); then echo "No successful Unit tests run exists." >&2; exit 1; fi
-            sleep 60
-          done
-          exit 1
       - name: Discover tested stable Nextcloud range
         if: steps.current.outputs.current == 'true'
         id: compatibility

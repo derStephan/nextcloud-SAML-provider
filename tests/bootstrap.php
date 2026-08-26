@@ -50,8 +50,8 @@ namespace OCP {
     interface IL10N { public function t(string $text, array $parameters = []): string; }
 }
 namespace OCP\AppFramework { class Controller { protected \OCP\IRequest $request; public function __construct(string $appName, \OCP\IRequest $request) { $this->request=$request; } } }
+namespace OCP\AppFramework { class Http { public const STATUS_BAD_REQUEST=400; public const STATUS_NOT_FOUND=404; public const STATUS_UNAUTHORIZED=401; public const STATUS_CREATED=201; public const STATUS_CONFLICT=409; public const STATUS_NO_CONTENT=204; } }
 namespace OCP\AppFramework\Http {
-    class Http { public const STATUS_BAD_REQUEST=400; public const STATUS_NOT_FOUND=404; public const STATUS_UNAUTHORIZED=401; public const STATUS_CREATED=201; public const STATUS_CONFLICT=409; public const STATUS_NO_CONTENT=204; }
     class Response { public function __construct(public int $status=200) {} }
     class DataResponse extends Response { public function __construct(public mixed $data=[], int $status=200) { parent::__construct($status); } }
     class RedirectResponse extends Response { public function __construct(public string $redirectURL) { parent::__construct(302); } }

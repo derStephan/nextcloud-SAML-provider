@@ -55,18 +55,18 @@ kimai:
           binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
         x509cert: '${idp_cert}'
       sp:
-        entityId: 'http://e2e-kimai/auth/saml/metadata'
+        entityId: 'http://e2e-kimai:8001/auth/saml/metadata'
         assertionConsumerService:
-          url: 'http://e2e-kimai/auth/saml/acs'
+          url: 'http://e2e-kimai:8001/auth/saml/acs'
           binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
 YAML
 docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password "${MARIADB_IMAGE:-mariadb:11.4}" >/dev/null
 for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
 docker run -d --name "$kimai" --network "$network" -e 'DATABASE_URL=mysql://kimai:kimai@e2e-mariadb:3306/kimai?charset=utf8mb4&serverVersion=mariadb-11.4.0' -e APP_SECRET=kimai-e2e-only -e TRUSTED_HOSTS='e2e-kimai|localhost|127\.0\.0\.1' -e TRUSTED_PROXIES='127.0.0.1,172.16.0.0/12' -v "$workspace/build/e2e/kimai-local.yaml:/opt/kimai/config/packages/local.yaml:ro" "${KIMAI_IMAGE:-kimai/kimai2:apache}" >/dev/null
-wait_http http://e2e-kimai/ "$kimai"
-metadata="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --fail http://e2e-kimai/auth/saml/metadata)"
+wait_http http://e2e-kimai:8001/ "$kimai"
+metadata="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --fail http://e2e-kimai:8001/auth/saml/metadata)"
 printf '%s' "$metadata" | grep -q EntityDescriptor || fail 'Kimai SAML metadata unavailable'
-printf '%s' "$metadata" | grep -q 'http://e2e-kimai/auth/saml/acs' || fail 'Kimai metadata has unexpected ACS'
-status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --output /dev/null --write-out '%{http_code}' -X POST http://e2e-kimai/auth/saml/acs)"
+printf '%s' "$metadata" | grep -q 'http://e2e-kimai:8001/auth/saml/acs' || fail 'Kimai metadata has unexpected ACS'
+status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --output /dev/null --write-out '%{http_code}' -X POST http://e2e-kimai:8001/auth/saml/acs)"
 [[ "$status" != 404 ]] || fail 'Kimai SAML ACS endpoint is disabled'
 echo 'Kimai SAML E2E wiring passed.'

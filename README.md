@@ -212,6 +212,10 @@ For Kimai-specific configuration and behavior, see the official [Kimai SAML docu
 
 Coverage is calculated across the complete `lib/` directory. The CI gate requires **80% line coverage** across this full scope; no production path is excluded to improve the result.
 
+## CI pipeline
+
+The release pipeline is strictly sequential: **Unit tests → Nextcloud integration tests → Kimai SAML end-to-end test → release**. A failed stage prevents every later stage from starting. Each downstream workflow checks out the exact commit validated by its predecessor.
+
 ## Automated Kimai integration test
 
 The `Kimai SAML end-to-end test` GitHub Actions workflow starts an isolated Nextcloud IdP, MariaDB, and Kimai SP with Docker. It verifies a fresh database migration, IdP metadata, Kimai SP metadata, and Kimai's ACS endpoint. It never uses release credentials, signing secrets, or the App Store publication path.

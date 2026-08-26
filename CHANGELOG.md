@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.3.3
+
+- Enforce a fail-closed sequential GitHub Actions pipeline: Unit tests → Nextcloud integration → Kimai SAML E2E → release.
+- Run each downstream workflow only after its direct predecessor succeeds and check out the exact tested commit SHA.
+
+## 0.3.2
+
+- Use Kimai's container port 8001 consistently in the Docker-network E2E readiness, metadata, Entity ID, and ACS checks.
+
+## 0.3.1
+
+- Correct the PHPUnit OCP HTTP test double namespace so controller status constants resolve as they do in Nextcloud.
+- Make the unknown-SP controller test deterministic and add coverage attributes to controller-harness tests.
+
 ## 0.3.0
 
 - Fix Kimai E2E readiness detection: accept a reachable 3xx response as healthy because Kimai redirects anonymous root requests to its login page.

@@ -1,11 +1,9 @@
 name: Kimai SAML end-to-end test
 
 on:
-  push:
-  pull_request:
-  workflow_dispatch:
-  schedule:
-    - cron: '11 5 * * 1'
+  workflow_run:
+    workflows: ["Nextcloud integration tests"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -16,11 +14,14 @@ concurrency:
 
 jobs:
   kimai-saml:
+    if: github.event.workflow_run.conclusion == 'success'
     name: Nextcloud IdP and Kimai SP
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Run Kimai SAML integration test
         env:
           NEXTCLOUD_IMAGE: nextcloud:34-apache

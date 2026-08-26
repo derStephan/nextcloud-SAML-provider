@@ -251,3 +251,25 @@ Not implemented:
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Development and tests
+
+Install development dependencies with Composer:
+
+```bash
+composer install
+```
+
+Run the unit test suite:
+
+```bash
+composer test
+```
+
+Generate a Clover report and enforce the line-coverage gate:
+
+```bash
+XDEBUG_MODE=coverage composer test:coverage
+```
+
+The coverage command writes `build/coverage/clover.xml` and fails when line coverage is below **80%**. The GitHub Actions workflow runs this gate for supported PHP versions.

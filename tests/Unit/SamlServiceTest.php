@@ -11,8 +11,12 @@ use OCA\SAMLProvider\Tests\Support\NullLogger;
 use OCA\SAMLProvider\Tests\Support\UrlGenerator;
 use OCA\SAMLProvider\Tests\Support\User;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 #[CoversClass(SamlService::class)]
+#[UsesClass(IdpConfigService::class)]
+#[UsesClass(ServiceProvider::class)]
+#[UsesClass(SignatureService::class)]
 final class SamlServiceTest extends TestCase {
     private ServiceProviderMapper $mapper; private IdpConfigService $idp; private SamlService $service;
     protected function setUp(): void {
@@ -52,7 +56,11 @@ final class SamlServiceTest extends TestCase {
         self::assertStringContainsString('InResponseTo="_request"', $response);
         self::assertStringContainsString('<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">alice@example.test</saml2:NameID>', $response);
         self::assertStringContainsString('Name="mail"', $response);
-        self::assertSame(2, substr_count($response, '<ds:Signature'));
+        $document = new \DOMDocument();
+        self::assertTrue($document->loadXML($response));
+        $xpath = new \DOMXPath($document);
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+        self::assertSame(2, $xpath->query('//ds:Signature')->length);
     }
     private function provider(): ServiceProvider { $sp = new ServiceProvider(); $sp->setId(1); $sp->setSpEntityId('https://sp.example.test/metadata'); $sp->setSpName('Example SP'); $sp->setAcsUrl('https://sp.example.test/acs'); $sp->setSignAssertions(true); $sp->setIsEnabled(true); return $sp; }
     /** @return array{string,string} */ private function newCertificate(): array { $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]); self::assertNotFalse($key); $csr = openssl_csr_new(['commonName' => 'test'], $key); $cert = openssl_csr_sign($csr, null, $key, 1); openssl_x509_export($cert, $certPem); openssl_pkey_export($key, $keyPem); return [$certPem, $keyPem]; }

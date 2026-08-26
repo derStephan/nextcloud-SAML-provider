@@ -87,25 +87,25 @@ Additional attributes can be mapped with JSON. For example:
 {"username":"uid","email":"mail","name":"displayName"}
 ```
 
-## Complete example: Kimai
+## Kimai example
 
-This example connects a Kimai installation at `https://kimai.example.com` to a Nextcloud IdP at `https://cloud.example.com`.
+This example connects Kimai at `https://kimai.example.com` to Nextcloud at `https://cloud.example.com`.
 
-### 1. Create the service in Nextcloud
+### Nextcloud connected service
 
-In **Administration settings → SAML Provider → Connect a new service**, create an entry with:
+In **Administration settings → SAML Provider → Connect a new service**, create:
 
-| Nextcloud field | Value |
+| Field | Value |
 | --- | --- |
 | Name | `Kimai` |
 | Entity ID | `https://kimai.example.com/auth/saml/metadata` |
 | ACS URL | `https://kimai.example.com/auth/saml/acs` |
 
-In the service details, use the default **Email address** NameID format. Leave **Require signed AuthnRequests** disabled unless Kimai has been configured with its own signing certificate and signed AuthnRequests are required.
+Use the default **Email address** NameID format. Leave **Require signed AuthnRequests** disabled for the standard Kimai configuration below.
 
-### 2. Add Kimai's SAML configuration
+### Kimai `local.yaml`
 
-Create or update Kimai's `config/packages/local.yaml` with the following configuration. Replace the certificate placeholder with the **single-line** certificate displayed by the Nextcloud SAML Provider app. Do not include the PEM `BEGIN CERTIFICATE` / `END CERTIFICATE` lines or any line breaks.
+Add the following to Kimai's `config/packages/local.yaml`. Replace the certificate placeholder with the **single-line** Nextcloud signing certificate: remove the PEM `BEGIN CERTIFICATE` / `END CERTIFICATE` lines and all line breaks.
 
 ```yaml
 kimai:
@@ -113,12 +113,10 @@ kimai:
         provider: nextcloud
         activate: true
         title: 'Login with Nextcloud'
-
         mapping:
             - { saml: $mail, kimai: email }
             - { saml: $displayName, kimai: alias }
             - { saml: 'SAML user', kimai: title }
-
         connection:
             idp:
                 entityId: 'https://cloud.example.com/apps/saml_provider/saml/metadata'
@@ -128,8 +126,7 @@ kimai:
                 singleLogoutService:
                     url: 'https://cloud.example.com/apps/saml_provider/saml/slo'
                     binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
-                x509cert: 'PASTE_THE_NEXTCLOUD_CERTIFICATE_AS_ONE_BASE64_LINE_HERE'
-
+                x509cert: 'PASTE_NEXTCLOUD_CERTIFICATE_AS_ONE_BASE64_LINE_HERE'
             sp:
                 entityId: 'https://kimai.example.com/auth/saml/metadata'
                 assertionConsumerService:
@@ -138,17 +135,16 @@ kimai:
                 singleLogoutService:
                     url: 'https://kimai.example.com/auth/saml/logout'
                     binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
-
             strict: true
             debug: false
             security:
+                wantMessagesSigned: true
+                wantAssertionsSigned: true
+                wantNameIdEncrypted: false
                 nameIdEncrypted: false
                 authnRequestsSigned: false
                 logoutRequestSigned: false
                 logoutResponseSigned: false
-                wantMessagesSigned: true
-                wantAssertionsSigned: true
-                wantNameIdEncrypted: false
                 requestedAuthnContext: true
                 signMetadata: false
                 wantXMLValidation: true
@@ -156,42 +152,11 @@ kimai:
                 digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256'
 ```
 
-Kimai requires an email mapping for SAML users. The `mail` and `displayName` attributes used above are sent by this app.
+Kimai requires an email mapping. This app sends `uid`, `displayName`, and `mail` for users that have those Nextcloud profile values.
 
-### 3. Kimai behind a reverse proxy
+If Kimai runs behind a reverse proxy, configure its **trusted proxies** and forward the original HTTPS protocol, host, and port. Otherwise Kimai may reject the SAML response because it sees an internal HTTP URL or port. Clear Kimai's cache after changing `local.yaml` or proxy settings.
 
-If Kimai runs in Docker behind a reverse proxy, Kimai must trust that proxy. Otherwise it can interpret the ACS URL as an internal HTTP URL (for example, `http://…:8001`) and reject the response.
-
-Set `TRUSTED_PROXIES` to the proxy's IP address as seen by the Kimai container. Use one IP address per value if the installed Symfony version has issues with CIDR notation. Confirm the effective value inside the container:
-
-```bash
-docker compose exec kimai sh -lc 'printf "%s\n" "$TRUSTED_PROXIES"'
-```
-
-The reverse proxy must forward the original protocol, host, and port. A Caddy example is:
-
-```caddy
-kimai.example.com {
-    reverse_proxy kimai:8001 {
-        header_up Host {host}
-        header_up X-Forwarded-Host {host}
-        header_up X-Forwarded-Proto https
-        header_up X-Forwarded-Port 443
-        header_up X-Forwarded-For {remote_host}
-    }
-}
-```
-
-### 4. Reload Kimai and test
-
-After changing `local.yaml` or proxy environment variables, recreate the Kimai container if needed and clear its cache:
-
-```bash
-docker compose up -d --force-recreate kimai
-docker compose exec kimai /opt/kimai/bin/console cache:clear --env=prod
-```
-
-Open Kimai's login screen and choose **Login with Nextcloud**. After authenticating with Nextcloud, Kimai should create or match the user using the SAML email attribute.
+For Kimai options, proxy guidance, and troubleshooting, see the official [Kimai SAML documentation](https://www.kimai.org/documentation/saml.html).
 
 ## Signing AuthnRequests
 

@@ -1,0 +1,49 @@
+name: Nextcloud integration tests
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '43 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  supported-nextcloud-versions:
+    name: Discover supported Nextcloud versions
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.versions.outputs.versions }}
+    steps:
+      - id: versions
+        name: Build Nextcloud version matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          versions="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$"))] | map(tonumber) | sort | map(tostring)')"
+          if [[ "$versions" == "[]" ]]; then echo "No supported Nextcloud versions were returned." >&2; exit 1; fi
+          echo "Testing supported Nextcloud versions: $versions"
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+  integration:
+    name: Nextcloud ${{ matrix.nextcloud }}
+    needs: supported-nextcloud-versions
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        nextcloud: ${{ fromJSON(needs.supported-nextcloud-versions.outputs.versions) }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Start Nextcloud
+        run: docker run --detach --name nextcloud-under-test --publish 8080:80 --volume "$GITHUB_WORKSPACE:/var/www/html/custom_apps/saml_provider:ro" "nextcloud:${{ matrix.nextcloud }}-apache"
+      - name: Run integration smoke test
+        env:
+          NEXTCLOUD_CONTAINER: nextcloud-under-test
+          NEXTCLOUD_URL: http://127.0.0.1:8080
+          NEXTCLOUD_VERSION: ${{ matrix.nextcloud }}
+        run: tests/Integration/smoke.sh
+      - name: Show Nextcloud logs on failure
+        if: failure()
+        run: docker logs nextcloud-under-test
+      - name: Stop Nextcloud
+        if: always()
+        run: docker rm --force nextcloud-under-test || true

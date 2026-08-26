@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.2.3
+
+- Restore the 80% coverage gate across the complete `lib/` directory without source exclusions.
+- Fix the Kimai E2E migration assertion by inspecting the fresh Nextcloud SQLite database through PDO instead of using a non-portable `occ db:query` command.
+- Add AuthnRequest size-limit and DTD/entity rejection regression tests.
+
+## 0.2.2
+
+- Fix DOM-based XMLDSig serialization: signed nested assertions no longer inject a second XML declaration into the enclosing SAML Response.
+- Add a regression assertion that the generated SAML Response is well-formed XML.
+- Set the whole-`lib/` coverage gate to a transparent 50% baseline while controller and real database integration coverage is added.
+
 ## 0.2.1
 
 - Add a separate Docker-based Kimai SAML integration workflow that verifies a fresh Nextcloud migration, IdP metadata, Kimai SP metadata, and the Kimai ACS endpoint.

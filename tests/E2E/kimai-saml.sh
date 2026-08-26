@@ -14,7 +14,11 @@ docker exec --user www-data "$nextcloud" php occ maintenance:install --database 
 docker exec --user www-data "$nextcloud" php occ config:system:set overwrite.cli.url --value=http://e2e-nextcloud >/dev/null
 docker exec --user www-data "$nextcloud" php occ app:enable saml_provider >/dev/null
 # A real SQL query makes a missing Migration fail this E2E test.
-docker exec --user www-data "$nextcloud" php occ db:query 'SELECT COUNT(*) FROM oc_saml_provider_sp' >/dev/null 2>&1 || fail 'saml_provider_sp migration table is unavailable'
+docker exec --user www-data "$nextcloud" php -r '
+$db = new PDO("sqlite:/var/www/html/data/nextcloud.db");
+$name = $db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"oc_saml_provider_sp\"")->fetchColumn();
+if ($name !== "oc_saml_provider_sp") { fwrite(STDERR, "missing migration table\n"); exit(1); }
+' || fail 'saml_provider_sp migration table is unavailable'
 # Test-only self-signed IdP material. It exists only inside this ephemeral Docker container.
 docker exec --user www-data "$nextcloud" sh -ec 'openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/idp.key -out /tmp/idp.crt -subj "/CN=e2e-nextcloud" -days 1 >/dev/null 2>&1; php occ config:app:set saml_provider idp_certificate --value="$(cat /tmp/idp.crt)"; php occ config:app:set saml_provider idp_private_key --value="$(cat /tmp/idp.key)"'
 idp_cert="$(docker exec --user www-data "$nextcloud" php occ config:app:get saml_provider idp_certificate | awk 'BEGIN{ORS=""} !/BEGIN CERTIFICATE|END CERTIFICATE/{gsub(/[[:space:]]/,"");print}')"

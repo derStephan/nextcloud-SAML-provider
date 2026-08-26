@@ -42,6 +42,15 @@ final class SamlServiceTest extends TestCase {
         $this->expectException(\InvalidArgumentException::class);
         $this->service->parseAuthnRequest('not-base64', 'post');
     }
+    public function testRejectsOversizedAuthnRequest(): void {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->parseAuthnRequest(base64_encode(str_repeat('A', 1048577)), 'post');
+    }
+    public function testRejectsDtdEntityAuthnRequest(): void {
+        $xml = '<!DOCTYPE x [<!ENTITY payload "blocked">]><samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_x"><Issuer>&payload;</Issuer></samlp:AuthnRequest>';
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->parseAuthnRequest(base64_encode($xml), 'post');
+    }
     public function testResolvesOnlyEnabledServiceProviders(): void {
         $sp = $this->provider(); $this->mapper->byEntityId = $sp; $this->mapper->byId = $sp;
         self::assertSame($sp, $this->service->resolveServiceProvider('https://sp.example.test/metadata'));
@@ -52,6 +61,9 @@ final class SamlServiceTest extends TestCase {
     public function testBuildsSignedResponseWithExpectedSubjectAndAttributes(): void {
         $sp = $this->provider(); $response = base64_decode($this->service->buildResponse($sp, new User('alice', 'alice@example.test', 'Alice'), '_request', 'https://attacker.example/acs'), true);
         self::assertNotFalse($response);
+        self::assertSame(1, substr_count($response, '<?xml'));
+        $document = new \DOMDocument();
+        self::assertTrue($document->loadXML($response, LIBXML_NONET));
         self::assertStringContainsString('Destination="https://sp.example.test/acs"', $response);
         self::assertStringContainsString('InResponseTo="_request"', $response);
         self::assertStringContainsString('<saml2:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">alice@example.test</saml2:NameID>', $response);

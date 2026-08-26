@@ -351,7 +351,7 @@ XML;
         $signatureNode = $doc->importNode($signatureDocument->documentElement, true);
         $parent = $doc->documentElement;
         $parent->insertBefore($signatureNode, $issuer->nextSibling);
-        $result = $doc->saveXML();
+        $result = $doc->saveXML($doc->documentElement);
         if ($result === false) {
             throw new \RuntimeException('Failed to serialize signed SAML XML');
         }

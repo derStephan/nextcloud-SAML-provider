@@ -250,7 +250,7 @@ After the unit-test workflow succeeds, the integration workflow discovers suppor
 
 Container and application logs are printed if a smoke test fails, and the container is removed in all cases.
 
-### Kimai SAML end-to-end wiring test
+### Kimai SAML end-to-end test
 
 After all Nextcloud matrix jobs are green, the `Kimai SAML end-to-end test` launches a private Docker network containing:
 
@@ -262,9 +262,11 @@ The test installs and enables the app in an ephemeral Nextcloud instance, checks
 
 - Kimai publishes SAML metadata containing an `EntityDescriptor`;
 - that metadata advertises the expected Kimai ACS URL; and
-- Kimai's SAML ACS endpoint is enabled (it must not return `404`).
+- Kimai's SAML ACS endpoint is enabled (it must not return `404`);
+- a full SP-initiated SSO exchange with a shared cookie jar: Kimai creates the AuthnRequest, Nextcloud redirects the anonymous client to its login page, the temporary administrator authenticates, Nextcloud returns a signed POST-binding response, and the test submits it to Kimai's ACS; and
+- provisioning: Kimai's real MariaDB database must contain exactly one imported user with the configured email and `saml` authentication mode.
 
-This is an interoperability **wiring** test: it proves that fresh app installation/migration, IdP metadata, Kimai configuration, SP metadata, and the ACS route fit together in real containers. It intentionally does **not** currently automate a browser login, create a user in Kimai, submit an AuthnRequest through a browser, or validate the final signed SAML Response at Kimai. Those are valuable candidates for a future full browser-driven SSO test; they are not claimed as current coverage.
+This is a full protocol-level HTTP test: it validates redirects, cookies, the real Nextcloud login form, AuthnRequest parsing, SP lookup, signed SAML POST binding, Kimai ACS validation, and SAML-user import. It deliberately does not assert visual rendering or JavaScript behavior, which are separate UI concerns.
 
 All containers, the temporary network, test certificates, database, and configuration are discarded after the run. The workflow receives no release credentials, signing keys, or App Store token. On failure it prints container diagnostics before cleanup.
 

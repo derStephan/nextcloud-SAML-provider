@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Isolated SAML interoperability wiring check. It deliberately has no release/App Store secrets.
+# Isolated full SAML interoperability test. It deliberately has no release/App Store secrets.
 set -euo pipefail
 network=saml-e2e; nextcloud=e2e-nextcloud; kimai=e2e-kimai; mariadb=e2e-mariadb
 workspace="${GITHUB_WORKSPACE:-$PWD}"
@@ -27,12 +27,15 @@ docker exec --user www-data "$nextcloud" php occ maintenance:install --database 
 docker exec --user www-data "$nextcloud" php occ config:system:set overwrite.cli.url --value=http://e2e-nextcloud >/dev/null
 docker exec --user www-data "$nextcloud" php occ config:system:set trusted_domains 1 --value=e2e-nextcloud >/dev/null
 docker exec --user www-data "$nextcloud" php occ app:enable saml_provider >/dev/null
-# A real SQL query makes a missing Migration fail this E2E test.
+# Kimai requires an Email assertion attribute; all values are ephemeral test data.
+docker exec --user www-data "$nextcloud" php occ user:setting admin settings email --value=admin@example.test >/dev/null
 docker exec --user www-data "$nextcloud" php -r '
 $db = new PDO("sqlite:/var/www/html/data/nextcloud.db");
 $name = $db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"oc_saml_provider_sp\"")->fetchColumn();
 if ($name !== "oc_saml_provider_sp") { fwrite(STDERR, "missing migration table\n"); exit(1); }
-' || fail 'saml_provider_sp migration table is unavailable'
+$stmt = $db->prepare("INSERT INTO oc_saml_provider_sp (sp_entity_id, sp_name, acs_url, slo_url, sp_certificate, name_id_format, attribute_mapping, sign_assertions, require_signed_requests, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$stmt->execute(["http://e2e-kimai:8001/auth/saml/metadata", "Kimai E2E", "http://e2e-kimai:8001/auth/saml/acs", "", "", "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress", "{\"Email\":\"mail\",\"FirstName\":\"displayName\"}", 1, 0, 1]);
+' || fail 'saml_provider_sp migration table is unavailable or cannot register Kimai'
 # Test-only self-signed IdP material. It exists only inside this ephemeral Docker container.
 docker exec --user www-data "$nextcloud" sh -ec 'openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/idp.key -out /tmp/idp.crt -subj "/CN=e2e-nextcloud" -days 1 >/dev/null 2>&1; php occ config:app:set saml_provider idp_certificate --value="$(cat /tmp/idp.crt)"; php occ config:app:set saml_provider idp_private_key --value="$(cat /tmp/idp.key)"'
 idp_cert="$(docker exec --user www-data "$nextcloud" php occ config:app:get saml_provider idp_certificate | awk 'BEGIN{ORS=""} !/BEGIN CERTIFICATE|END CERTIFICATE/{gsub(/[[:space:]]/,"");print}')"
@@ -69,4 +72,35 @@ printf '%s' "$metadata" | grep -q EntityDescriptor || fail 'Kimai SAML metadata 
 printf '%s' "$metadata" | grep -q 'http://e2e-kimai:8001/auth/saml/acs' || fail 'Kimai metadata has unexpected ACS'
 status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --output /dev/null --write-out '%{http_code}' -X POST http://e2e-kimai:8001/auth/saml/acs)"
 [[ "$status" != 404 ]] || fail 'Kimai SAML ACS endpoint is disabled'
-echo 'Kimai SAML E2E wiring passed.'
+
+# Full SP-initiated SSO, driven by a shared cookie jar: Kimai AuthnRequest ->
+# Nextcloud login -> signed POST binding -> Kimai ACS -> database user import.
+e2e_dir="$workspace/build/e2e"; cookies="$e2e_dir/browser-cookies.txt"
+rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login-submit,acs}.headers "$e2e_dir"/{login,saml-response,acs}.html
+http() { docker run --rm --network "$network" --volume "$e2e_dir:/work" curlimages/curl:8.10.1 "$@"; }
+location() { sed -n 's/^[Ll]ocation: *\(.*\)\r*$/\1/p' "$1" | tail -n 1 | tr -d '\r'; }
+absolute_url() { case "$1" in http://*|https://*) printf '%s' "$1" ;; /*) printf '%s%s' "$2" "$1" ;; *) printf '%s/%s' "$2" "$1" ;; esac; }
+
+echo 'Starting full Kimai SSO flow'
+http --silent --show-error --dump-header /work/kimai-login.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" http://e2e-kimai:8001/auth/saml/login
+sso_url="$(location "$e2e_dir/kimai-login.headers")"; [[ -n "$sso_url" ]] || fail 'Kimai login did not redirect to Nextcloud'
+sso_url="$(absolute_url "$sso_url" http://e2e-kimai:8001)"; [[ "$sso_url" == http://e2e-nextcloud/apps/saml_provider/saml/sso\?* ]] || fail "unexpected IdP endpoint: $sso_url"
+http --silent --show-error --dump-header /work/sso.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$sso_url"
+login_url="$(location "$e2e_dir/sso.headers")"; [[ -n "$login_url" ]] || fail 'Nextcloud SSO did not redirect anonymous client to login'
+login_url="$(absolute_url "$login_url" http://e2e-nextcloud)"
+http --silent --show-error --output /work/login.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$login_url"
+requesttoken="$(sed -n 's/.*name="requesttoken" value="\([^" ]*\)".*/\1/p' "$e2e_dir/login.html" | head -n 1)"; [[ -n "$requesttoken" ]] || fail 'Nextcloud login form did not provide requesttoken'
+http --silent --show-error --dump-header /work/login-submit.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken" "$login_url"
+return_url="$(location "$e2e_dir/login-submit.headers")"; [[ -n "$return_url" ]] || fail 'Nextcloud login did not return to pending SSO request'
+return_url="$(absolute_url "$return_url" http://e2e-nextcloud)"
+http --silent --show-error --output /work/saml-response.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$return_url"
+acs_url="$(sed -n 's/.*<form[^>]*action="\([^" ]*\)".*/\1/p' "$e2e_dir/saml-response.html" | head -n 1)"
+saml_response="$(sed -n 's/.*name="SAMLResponse" value="\([^" ]*\)".*/\1/p' "$e2e_dir/saml-response.html" | head -n 1)"
+[[ "$acs_url" == 'http://e2e-kimai:8001/auth/saml/acs' ]] || fail "unexpected ACS URL: ${acs_url:-none}"
+[[ -n "$saml_response" ]] || fail 'Nextcloud response has no SAMLResponse'
+http --silent --show-error --dump-header /work/acs.headers --output /work/acs.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode "SAMLResponse=$saml_response" "$acs_url"
+acs_status="$(awk 'NR == 1 {print $2}' "$e2e_dir/acs.headers" | tr -d '\r')"; [[ "$acs_status" =~ ^30[12378]$ ]] || fail "Kimai rejected signed SAML response (HTTP ${acs_status:-none})"
+user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
+[[ "$user_count" == '1' ]] || fail "Kimai did not import SAML user (count: ${user_count:-none})"
+rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login-submit,acs}.headers "$e2e_dir"/{login,saml-response,acs}.html
+echo 'Kimai SAML full browser-style SSO test passed.'

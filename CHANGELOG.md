@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.6.0
+
+- Upgrade the mandatory Kimai Docker workflow to a full SP-initiated SSO regression test: AuthnRequest, Nextcloud login, signed POST binding, Kimai ACS validation, and MariaDB-backed SAML-user provisioning.
+
 ## 0.5.8
 
 - Fix SAML SSO requests on Nextcloud 33 by removing the unsupported `IRequest::getServerParam()` call.

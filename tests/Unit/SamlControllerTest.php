@@ -87,7 +87,11 @@ final class SamlControllerTest extends TestCase {
         $service = $this->createMock(SamlService::class);
         $service->method('parseAuthnRequest')->willReturn(['id' => '_request', 'issuer' => 'https://sp.example.test/meta', 'acsUrl' => null, 'nameIdPolicy' => null, 'rawXml' => '<request/>']);
         $service->method('resolveServiceProvider')->willReturn($sp);
-        $service->expects(self::once())->method('enforceRequestSignature');
+        $_SERVER['QUERY_STRING'] = 'SAMLRequest=encoded-request&RelayState=https%3A%2F%2Fsp.example.test';
+        $service->expects(self::once())->method('enforceRequestSignature')->with(
+            self::isType('array'), 'redirect', self::isType('array'), $sp,
+            'SAMLRequest=encoded-request&RelayState=https%3A%2F%2Fsp.example.test'
+        );
         $service->method('buildResponse')->willReturn('encoded-response');
         $session = new Session(new User());
         $session->loggedIn = true;

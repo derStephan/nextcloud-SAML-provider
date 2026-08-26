@@ -95,7 +95,7 @@ final class SamlServiceTest extends TestCase {
         self::assertStringContainsString('Name="department"', $xml);
         self::assertStringNotContainsString('Name="unknown"', $xml);
         self::assertStringNotContainsString('InResponseTo=', $xml);
-        self::assertSame(1, substr_count($xml, '<ds:Signature'));
+        self::assertSame(1, substr_count($xml, '<ds:Signature xmlns:ds='));
         self::assertStringNotContainsString('>alice</saml2:NameID>', $xml);
     }
 

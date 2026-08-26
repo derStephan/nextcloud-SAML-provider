@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -208,17 +208,80 @@ For Kimai-specific configuration and behavior, see the official [Kimai SAML docu
 - This IdP does not keep a server-side replay cache for issued assertions. Service Providers should validate `InResponseTo`, assertion IDs, timestamps, audience, recipient, and XML signatures, and reject replayed responses.
 - SP-initiated Single Logout is not implemented as a validated SAML LogoutRequest flow.
 
-## Test coverage
+## Quality assurance and release process
 
-Coverage is calculated across the complete `lib/` directory. The CI gate requires **80% line coverage** across this full scope; no production path is excluded to improve the result.
+This project uses a layered test approach. The layers answer different questions: unit tests validate application behavior in isolation, Nextcloud integration tests validate installation and framework integration, and the Kimai test validates the SAML wiring with a real external Service Provider. A later stage is never started after a failed earlier stage.
 
-## CI pipeline
+### Coverage policy
 
-The release pipeline is strictly sequential: **Unit tests → Nextcloud integration tests → Kimai SAML end-to-end test → release**. A failed stage prevents every later stage from starting. Each downstream workflow checks out the exact commit validated by its predecessor.
+PHPUnit calculates line coverage across the complete `lib/` directory. The mandatory CI gate is **80% line coverage** across this full production scope; no production paths are excluded merely to increase the percentage. The project aims to keep the observed result materially above that gate so normal maintenance changes have room without weakening the baseline.
 
-## Automated Kimai integration test
+Coverage is a useful safety signal, not proof of correctness. In particular, meaningful SAML security checks, input validation, XML parsing, signature verification, controller authorization, and failure paths are tested with assertions in addition to being executed.
 
-The `Kimai SAML end-to-end test` GitHub Actions workflow starts an isolated Nextcloud IdP, MariaDB, and Kimai SP with Docker. It verifies a fresh database migration, IdP metadata, Kimai SP metadata, and Kimai's ACS endpoint. It never uses release credentials, signing secrets, or the App Store publication path.
+### Fail-closed pipeline
+
+GitHub Actions runs the following dependency chain:
+
+```text
+Unit tests
+    -> Nextcloud integration tests
+        -> Kimai SAML end-to-end wiring test
+            -> Release app (main only)
+```
+
+Each downstream workflow is triggered through `workflow_run` only when its direct predecessor concluded successfully. It checks out the exact predecessor commit (`head_sha`) rather than an arbitrary newer branch state. Therefore:
+
+- a failed unit-test run blocks integration tests, Kimai, and release;
+- a failed Nextcloud integration run blocks Kimai and release;
+- a failed Kimai run blocks release; and
+- a release run first confirms that the tested commit is still the current `main` commit, avoiding a release of a superseded revision.
+
+Unit tests run on the currently supported PHP versions discovered from the lifecycle API. They install the Composer dependencies, run PHPUnit, generate Clover coverage, enforce the 80% full-`lib/` gate, and upload the report to Codecov. A Codecov upload issue does not turn a successful test suite into a failed build.
+
+### Nextcloud integration tests
+
+After the unit-test workflow succeeds, the integration workflow discovers supported stable Nextcloud major releases (33 and later) and, when an explicit current Docker RC or beta Apache image exists, adds that pre-release image to the matrix. Each matrix job:
+
+1. starts the selected official Nextcloud Apache Docker image;
+2. mounts this app read-only as `custom_apps/saml_provider`;
+3. installs an ephemeral SQLite-backed Nextcloud instance;
+4. enables the app and verifies that Nextcloud reports it as enabled;
+5. verifies the expected initial endpoint behavior: metadata is unavailable until IdP material exists (`404`) and SSO without an AuthnRequest is rejected (`400`).
+
+Container and application logs are printed if a smoke test fails, and the container is removed in all cases.
+
+### Kimai SAML end-to-end wiring test
+
+After all Nextcloud matrix jobs are green, the `Kimai SAML end-to-end test` launches a private Docker network containing:
+
+- `nextcloud:34-apache` as the IdP under test;
+- `mariadb:11.4` for Kimai; and
+- `kimai/kimai2:apache` as a real SAML Service Provider.
+
+The test installs and enables the app in an ephemeral Nextcloud instance, checks that the `oc_saml_provider_sp` migration table exists, creates test-only self-signed IdP key material inside the container, and verifies that the IdP metadata endpoint responds. It then creates Kimai's SAML configuration from the test IdP endpoint and certificate, waits for MariaDB and Kimai to become ready, and verifies all of the following:
+
+- Kimai publishes SAML metadata containing an `EntityDescriptor`;
+- that metadata advertises the expected Kimai ACS URL; and
+- Kimai's SAML ACS endpoint is enabled (it must not return `404`).
+
+This is an interoperability **wiring** test: it proves that fresh app installation/migration, IdP metadata, Kimai configuration, SP metadata, and the ACS route fit together in real containers. It intentionally does **not** currently automate a browser login, create a user in Kimai, submit an AuthnRequest through a browser, or validate the final signed SAML Response at Kimai. Those are valuable candidates for a future full browser-driven SSO test; they are not claimed as current coverage.
+
+All containers, the temporary network, test certificates, database, and configuration are discarded after the run. The workflow receives no release credentials, signing keys, or App Store token. On failure it prints container diagnostics before cleanup.
+
+### Releases and App Store publication
+
+A release workflow can run only after the green Kimai workflow and only for a successful `main` commit. It runs in the protected `release` environment and performs these steps:
+
+1. confirms that the tested SHA remains the current `main` tip;
+2. derives the tested stable Nextcloud compatibility range;
+3. decides whether a release is required (a scheduled compatibility check skips a release when the range is unchanged);
+4. updates release metadata, creates a release commit and annotated tag;
+5. signs the archive with the protected Nextcloud signing key, verifies `appinfo/signature.json`, and creates `saml_provider.tar.gz`;
+6. creates a GitHub Release and attaches that signed archive.
+
+The Nextcloud App Store is deliberately **opt-in**. By default, the workflow creates the signed GitHub Release but does **not** publish to the App Store. Publication happens only when the repository variable `PUBLISH_TO_APPSTORE` is set exactly to `true`; only then is the protected `NEXTCLOUD_APPSTORE_TOKEN` used to submit the already published GitHub Release archive. This makes the default behavior a practical release sign-off/dry run for App Store delivery.
+
+The App Store listing itself is generated from `appinfo/info.xml`, including summary, description, license, supported Nextcloud versions, repository URL, issue tracker URL, and author. Manual recovery and first-release procedures are documented in [docs/APP_STORE_RELEASE.md](docs/APP_STORE_RELEASE.md).
 
 ## Security notes
 

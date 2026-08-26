@@ -71,7 +71,9 @@ class SamlController extends Controller {
             $sp = $this->samlService->resolveServiceProvider($authnRequest['issuer']);
             $this->samlService->enforceRequestSignature(
                 $authnRequest, $binding, $this->request->getParams(), $sp,
-                (string)$this->request->getServerParam('QUERY_STRING', '')
+                isset($_SERVER['QUERY_STRING']) && is_string($_SERVER['QUERY_STRING'])
+                    ? $_SERVER['QUERY_STRING']
+                    : ''
             );
         } catch (\Throwable $e) {
             $this->logger->warning('Rejected AuthnRequest: ' . $e->getMessage(), ['app' => 'saml_provider']);

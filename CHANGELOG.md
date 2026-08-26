@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.5.8
+
+- Fix SAML SSO requests on Nextcloud 33 by removing the unsupported `IRequest::getServerParam()` call.
+- Preserve the raw redirect query string through `$_SERVER['QUERY_STRING']` for standards-compliant SAML Redirect-binding signature validation, and align the unit-test request double with the real Nextcloud public API.
+
+## 0.5.7
+
+- Restore the existing shield icon used inside Nextcloud.
+- Add the generated SAML identity-network illustration as `docs/appstore-screenshot.png` for App Store/documentation presentation.
+
+## 0.5.6
+
+- Replace the generic shield/checkmark app icon with an original SAML identity-network icon and provide a contrast-optimized dark-mode variant.
+
+## 0.5.5
+
+- Fix the persistent-NameID unit test to count only the XMLDSig `Signature` element instead of similarly named child elements.
+
+## 0.5.4
+
+- Expand the README with a transparent, precise description of the full layered test strategy, fail-closed workflow order, Kimai E2E wiring coverage and boundaries, signed GitHub releases, and opt-in App Store publication.
+
 ## 0.5.3
 
 - Add meaningful regression coverage for malformed Redirect requests, persistent NameIDs, unsigned responses, custom attribute mappings, AuthnRequest signature-policy failures, anonymous SSO redirects, and inconsistent logged-in sessions.
@@ -131,15 +153,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.5.3] - 2026-08-26
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

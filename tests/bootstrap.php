@@ -46,7 +46,7 @@ namespace {
     require_once __DIR__ . '/Support/TestDoubles.php';
 }
 namespace OCP {
-    interface IRequest { public function getParam(string $key): mixed; public function getParams(): array; public function getMethod(): string; public function getServerParam(string $key, mixed $default = null): mixed; }
+    interface IRequest { public function getParam(string $key): mixed; public function getParams(): array; public function getMethod(): string; }
     interface IUserSession { public function isLoggedIn(): bool; public function getUser(): ?IUser; public function logout(): void; }
     interface IL10N { public function t(string $text, array $parameters = []): string; }
 }

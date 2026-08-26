@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.3.0
+
+- Fix Kimai E2E readiness detection: accept a reachable 3xx response as healthy because Kimai redirects anonymous root requests to its login page.
+- Keep SAML metadata and ACS endpoint checks strict after the readiness phase.
+
+## 0.2.7
+
+- Add a PHPUnit OCP test harness and direct controller tests for Settings, launcher and SAML controller security branches.
+- Keep the complete `lib/` coverage scope and 80% coverage gate unchanged; this change is a test-harness expansion, not a source exclusion.
+
 ## 0.2.6
 
 - Trust Kimai loopback hosts in the ephemeral Docker E2E configuration so Kimai’s own container health request is not rejected as an untrusted host.

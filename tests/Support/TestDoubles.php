@@ -14,6 +14,20 @@ final class AppConfig implements IAppConfig {
     public function getValueString(string $app, string $key, string $default = '', bool $lazy = false): string { return $this->values[$key] ?? $default; }
     public function setValueString(string $app, string $key, string $value, bool $lazy = false, bool $sensitive = false): void { $this->values[$key] = $value; $this->writeOptions[$key] = ['lazy' => $lazy, 'sensitive' => $sensitive]; }
 }
-final class UrlGenerator implements IURLGenerator { public function __construct(private string $base = 'https://cloud.example.test') {} public function getAbsoluteURL(string $url): string { return $this->base . $url; } }
+class UrlGenerator implements IURLGenerator {
+    public function __construct(protected string $base = 'https://cloud.example.test') {}
+    public function getAbsoluteURL(string $url): string { return $this->base . $url; }
+    public function linkToRouteAbsolute(string $route, array $params = []): string { return $this->base . '/' . $route; }
+    public function linkTo(string $app, string $file): string { return '/apps/' . $app . '/' . $file; }
+    public function getBaseUrl(): string { return '/'; }
+}
 final class User implements IUser { public function __construct(private string $uid = 'alice', private ?string $mail = 'alice@example.test', private string $name = 'Alice Example') {} public function getUID(): string { return $this->uid; } public function getEMailAddress(): ?string { return $this->mail; } public function getDisplayName(): string { return $this->name; } }
 final class NullLogger implements LoggerInterface { public function emergency(\Stringable|string $message, array $context = []): void {} public function alert(\Stringable|string $message, array $context = []): void {} public function critical(\Stringable|string $message, array $context = []): void {} public function error(\Stringable|string $message, array $context = []): void {} public function warning(\Stringable|string $message, array $context = []): void {} public function notice(\Stringable|string $message, array $context = []): void {} public function info(\Stringable|string $message, array $context = []): void {} public function debug(\Stringable|string $message, array $context = []): void {} public function log($level, \Stringable|string $message, array $context = []): void {} }
+namespace OCA\SAMLProvider\Tests\Support;
+final class Request implements \OCP\IRequest { public function __construct(public array $params=[], public string $method='GET', public array $server=[]){} public function getParam(string $key): mixed{return $this->params[$key]??null;} public function getParams():array{return $this->params;} public function getMethod():string{return $this->method;} public function getServerParam(string $key,mixed $default=null):mixed{return $this->server[$key]??$default;} }
+final class Session implements \OCP\IUserSession { public bool $loggedIn=false; public bool $loggedOut=false; public function __construct(public ?\OCP\IUser $user=null){} public function isLoggedIn():bool{return $this->loggedIn;} public function getUser():?\OCP\IUser{return $this->user;} public function logout():void{$this->loggedOut=true;$this->loggedIn=false;} }
+final class L10N implements \OCP\IL10N { public function t(string $text,array $parameters=[]):string{return $text;} }
+final class InitialState implements \OCP\AppFramework\Services\IInitialState { public array $values=[]; public function provideInitialState(string $key,mixed $value):void{$this->values[$key]=$value;} }
+final class RouteUrlGenerator extends UrlGenerator { public function linkToRouteAbsolute(string $route,array $params=[]):string{return 'https://cloud.example.test/'.$route.(isset($params['spId'])?'/'.$params['spId']:'');} public function linkTo(string $app,string $file):string{return '/apps/'.$app.'/'.$file;} public function getBaseUrl():string{return '/';} }
+final class NonceManager { public function getNonce(): string { return 'test-nonce'; } }
+final class Server { public function getContentSecurityPolicyNonceManager(): NonceManager { return new NonceManager(); } }

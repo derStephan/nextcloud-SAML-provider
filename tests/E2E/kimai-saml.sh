@@ -6,7 +6,18 @@ workspace="${GITHUB_WORKSPACE:-$PWD}"
 cleanup(){ docker rm --force "$nextcloud" "$kimai" "$mariadb" 2>/dev/null || true; docker network rm "$network" 2>/dev/null || true; }
 trap cleanup EXIT
 fail(){ echo "E2E failure: $*" >&2; exit 1; }
-wait_http(){ local url="$1" name="$2"; for attempt in $(seq 1 90); do docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --fail --output /dev/null "$url" && return 0; sleep 2; done; docker logs "$name" >&2 || true; fail "Timed out waiting for $url"; }
+wait_http(){
+  local url="$1" name="$2" status
+  for attempt in $(seq 1 90); do
+    status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --output /dev/null --write-out '%{http_code}' "$url" || true)"
+    # Kimai correctly redirects anonymous requests (302) to its login page. Readiness
+    # means the application answered; endpoint-specific assertions below remain strict.
+    if [[ "$status" =~ ^[123][0-9]{2}$ ]]; then return 0; fi
+    sleep 2
+  done
+  docker logs "$name" >&2 || true
+  fail "Timed out waiting for $url (last HTTP status: ${status:-none})"
+}
 docker network create "$network" >/dev/null
 docker run -d --name "$nextcloud" --network "$network" -v "$workspace:/var/www/html/custom_apps/saml_provider:ro" "${NEXTCLOUD_IMAGE:-nextcloud:34-apache}" >/dev/null
 wait_http http://e2e-nextcloud/status.php "$nextcloud"

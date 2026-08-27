@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.34
+
+- Prevent obscured App Store/admin screenshots: the E2E capture now waits until the rendered SAML settings root owns the visible viewport centre and no large Nextcloud loading overlay remains before saving the image.
+
 ## 0.7.33
 
 - Make release-time E2E screenshot validation independent of Pillow: validate the PNG signature, IHDR chunk, and non-zero dimensions with Python's standard library, which is available on GitHub-hosted runners.
@@ -371,15 +375,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.7.34] - 2026-08-27
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

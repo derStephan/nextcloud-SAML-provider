@@ -44,10 +44,8 @@ See the project README for setup instructions, a complete Kimai example, securit
     <website>https://github.com/derStephan/nextcloud-SAML-provider</website>
     <bugs>https://github.com/derStephan/nextcloud-SAML-provider/issues</bugs>
     <repository>https://github.com/derStephan/nextcloud-SAML-provider.git</repository>
-    <screenshot>https://raw.githubusercontent.com/derStephan/nextcloud-SAML-provider/main/docs/admin-settings-e2e-nc33.png</screenshot>
-    <screenshot>https://raw.githubusercontent.com/derStephan/nextcloud-SAML-provider/main/docs/admin-settings-e2e-nc34.png</screenshot>
     <dependencies>
-        <nextcloud min-version="33" max-version="34"/>
+        <nextcloud min-version="33"/>
     </dependencies>
     <settings>
         <admin>OCA\SAMLProvider\Settings\Admin</admin>

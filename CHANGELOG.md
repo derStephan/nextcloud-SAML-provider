@@ -1,8 +1,13 @@
-# Changelog
+ # Changelog
 
 All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
+
+## 0.7.17
+
+- Fix the coverage gate to aggregate Clover statement metrics from the production `lib/` files themselves, matching PHPUnit's reported production line coverage instead of relying on a version-dependent project aggregate.
+- Add a regression test for the 545/637 (85.56%) coverage case and improve gate output with counted files and statements.
 
 ## 0.7.16
 

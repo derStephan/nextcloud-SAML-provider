@@ -89,6 +89,9 @@ http() { docker run --rm --user "$(id -u):$(id -g)" --network "$network" --volum
 location() { sed -n 's/^[Ll]ocation: *\(.*\)\r*$/\1/p' "$1" | tail -n 1 | tr -d '\r'; }
 absolute_url() { case "$1" in http://*|https://*) printf '%s' "$1" ;; /*) printf '%s%s' "$2" "$1" ;; *) printf '%s/%s' "$2" "$1" ;; esac; }
 
+echo '================================================================='
+echo 'ACTUAL KIMAI SSO TEST STARTS - copy logs from this line for debugging'
+echo '================================================================='
 echo 'Starting full Kimai SSO flow'
 http --silent --show-error --dump-header /work/kimai-login.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" http://e2e-kimai:8001/auth/saml/login
 sso_url="$(location "$e2e_dir/kimai-login.headers")"; [[ -n "$sso_url" ]] || fail 'Kimai login did not redirect to Nextcloud'
@@ -102,7 +105,10 @@ http --silent --show-error --dump-header /work/login.headers --output /work/logi
 login_json="$(python3 "$workspace/tests/E2E/extract_saml_post_form.py" "$e2e_dir/login.html")"
 requesttoken="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["requesttoken"])' <<< "$login_json")"
 [[ -n "$requesttoken" ]] || fail 'Nextcloud login page did not expose a request token'
-login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken")
+# The current login page exposes data-requesttoken for JavaScript requests. Send it
+# as both the documented requesttoken header and the conventional form parameter so
+# this HTTP-only test follows both supported server-side validation paths.
+login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --header "requesttoken: $requesttoken" --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken")
 http "${login_args[@]}" "$login_url"
 return_url="$(location "$e2e_dir/login-submit.headers")"
 if [[ -z "$return_url" || "$return_url" == *'/login?'* || "$return_url" == */login ]]; then
@@ -143,3 +149,6 @@ user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT
 rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login,login-submit,saml-response,acs}.headers "$e2e_dir"/{login,login-submit,saml-response,acs}.html
 completed=true
 echo 'Kimai SAML full browser-style SSO test passed.'
+echo '==============================================================='
+echo 'ACTUAL KIMAI SSO TEST ENDED SUCCESSFULLY - end of test trace'
+echo '==============================================================='

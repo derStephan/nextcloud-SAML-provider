@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.2
+
+- Add clear start and successful-end log markers around the actual Kimai SSO protocol trace.
+- Submit Nextcloud's login request token in both the `requesttoken` header and form field, matching the current login page's `data-requesttoken` contract and preserving compatibility with form-based validation.
+
 ## 0.7.1
 
 - Support Nextcloud's current `data-requesttoken` login-page attribute in the Kimai E2E flow, while retaining compatibility with hidden-input token templates.

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.0
+
+- Replace brittle shell parsing of the generated SAML POST form in the Kimai E2E test with a dedicated HTML parser.
+- Record the SSO return URL, headers, parsed form data, and a capped response excerpt when Nextcloud does not return the expected SAML POST form.
+
 ## 0.6.7
 
 - Make the Kimai E2E flow independent of a particular Nextcloud login-template request-token field: send the token when present, then validate the actual login submission result.

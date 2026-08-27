@@ -126,15 +126,27 @@ if [[ -z "$return_url" ]]; then
   fail 'Nextcloud login did not return to pending SSO request'
 fi
 return_url="$(absolute_url "$return_url" http://e2e-nextcloud)"
-http --silent --show-error --output /work/saml-response.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$return_url"
-acs_url="$(sed -n 's/.*<form[^>]*action="\([^" ]*\)".*/\1/p' "$e2e_dir/saml-response.html" | head -n 1)"
-saml_response="$(sed -n 's/.*name="SAMLResponse" value="\([^" ]*\)".*/\1/p' "$e2e_dir/saml-response.html" | head -n 1)"
-[[ "$acs_url" == 'http://e2e-kimai:8001/auth/saml/acs' ]] || fail "unexpected ACS URL: ${acs_url:-none}"
-[[ -n "$saml_response" ]] || fail 'Nextcloud response has no SAMLResponse'
+http --silent --show-error --dump-header /work/saml-response.headers --output /work/saml-response.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$return_url"
+# Parse the generated POST form rather than matching an assumed HTML attribute order.
+form_json="$(python3 "$workspace/tests/E2E/extract_saml_post_form.py" "$e2e_dir/saml-response.html")"
+acs_url="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["action"])' <<< "$form_json")"
+saml_response="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["SAMLResponse"])' <<< "$form_json")"
+if [[ "$acs_url" != 'http://e2e-kimai:8001/auth/saml/acs' || -z "$saml_response" ]]; then
+  echo "--- SSO return URL ---" >&2
+  printf '%s\n' "$return_url" >&2
+  echo "--- SSO response headers ---" >&2
+  cat "$e2e_dir/saml-response.headers" >&2 || true
+  echo "--- SSO response form parse ---" >&2
+  printf '%s\n' "$form_json" >&2
+  echo "--- SSO response excerpt ---" >&2
+  head -c 4096 "$e2e_dir/saml-response.html" >&2 || true
+  echo >&2
+  fail "Nextcloud did not return the expected SAML POST form (ACS: ${acs_url:-none})"
+fi
 http --silent --show-error --dump-header /work/acs.headers --output /work/acs.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode "SAMLResponse=$saml_response" "$acs_url"
 acs_status="$(awk 'NR == 1 {print $2}' "$e2e_dir/acs.headers" | tr -d '\r')"; [[ "$acs_status" =~ ^30[12378]$ ]] || fail "Kimai rejected signed SAML response (HTTP ${acs_status:-none})"
 user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
 [[ "$user_count" == '1' ]] || fail "Kimai did not import SAML user (count: ${user_count:-none})"
-rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login,login-submit,acs}.headers "$e2e_dir"/{login,login-submit,saml-response,acs}.html
+rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login,login-submit,saml-response,acs}.headers "$e2e_dir"/{login,login-submit,saml-response,acs}.html
 completed=true
 echo 'Kimai SAML full browser-style SSO test passed.'

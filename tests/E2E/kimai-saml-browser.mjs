@@ -13,6 +13,11 @@ page.setDefaultTimeout(20_000);
 
 try {
   await page.goto(kimaiUrl, { waitUntil: 'domcontentloaded' });
+  // A duplicated absolute URL is a Kimai baseurl/configuration error, not a
+  // browser failure. Stop before interacting with a misleading Nextcloud route.
+  if (/^http:\/\/e2e-nextcloud\/https?:\/\//.test(page.url())) {
+    throw new Error(`Kimai built an invalid IdP redirect: ${page.url()}. Check saml.baseurl.`);
+  }
   // Target visible credential controls, never Nextcloud template markup, hidden
   // request tokens, or generated form actions. Chromium executes the real flow.
   const password = page.locator('input[type="password"]').first();

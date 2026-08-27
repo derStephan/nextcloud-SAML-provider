@@ -53,6 +53,9 @@ kimai:
   saml:
     provider: nextcloud
     activate: true
+    # Kimai's SAML adapter resolves IdP endpoints against this base. It must be
+    # absolute and end in /auth/saml/ or an absolute IdP URL can become a path.
+    baseurl: 'http://e2e-kimai:8001/auth/saml/'
     title: Login with Nextcloud
     mapping:
       - { saml: \$Email, kimai: email }

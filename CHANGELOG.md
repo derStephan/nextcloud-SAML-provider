@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.8
+
+- Configure Kimai SAML `baseurl` explicitly as the complete E2E `/auth/saml/` URL, preventing the SAML adapter from resolving an absolute Nextcloud SSO endpoint as a relative path and duplicating the IdP host.
+- Fail early with a focused browser diagnostic if Kimai ever constructs a duplicated absolute IdP redirect again.
+
 ## 0.7.7
 
 - Install the exact pinned Playwright Node package in a temporary browser work directory with browser download disabled; the official Playwright Docker image supplies the matching browser binaries and operating-system dependencies.

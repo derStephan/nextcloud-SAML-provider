@@ -97,22 +97,15 @@ http --silent --show-error --dump-header /work/sso.headers --output /dev/null --
 login_url="$(location "$e2e_dir/sso.headers")"; [[ -n "$login_url" ]] || fail 'Nextcloud SSO did not redirect anonymous client to login'
 login_url="$(absolute_url "$login_url" http://e2e-nextcloud)"
 http --silent --show-error --dump-header /work/login.headers --output /work/login.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$login_url"
-# Login controllers can render requesttoken as a hidden field, but the normal login
-# endpoint also accepts the credential form without tying this protocol test to a
-# particular template/theme. Send the token when present; do not fail merely because a
-# Nextcloud version changes the login HTML.
-login_flat="$(tr '\n' ' ' < "$e2e_dir/login.html")"
-requesttoken="$(printf '%s' "$login_flat" | sed -n 's/.*name=["'"'"']requesttoken["'"'"'][^>]*value=["'"'"']\([^"'"'"' ]*\)["'"'"'].*/\1/p' | head -n 1)"
-if [[ -z "$requesttoken" ]]; then
-  requesttoken="$(printf '%s' "$login_flat" | sed -n 's/.*value=["'"'"']\([^"'"'"' ]*\)["'"'"'][^>]*name=["'"'"']requesttoken["'"'"'].*/\1/p' | head -n 1)"
-fi
-login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password')
-if [[ -n "$requesttoken" ]]; then
-  login_args+=(--data-urlencode "requesttoken=$requesttoken")
-fi
+# Current Nextcloud pages expose the CSRF value as data-requesttoken on <head>;
+# older templates can use a hidden input. The dedicated parser supports both forms.
+login_json="$(python3 "$workspace/tests/E2E/extract_saml_post_form.py" "$e2e_dir/login.html")"
+requesttoken="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["requesttoken"])' <<< "$login_json")"
+[[ -n "$requesttoken" ]] || fail 'Nextcloud login page did not expose a request token'
+login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken")
 http "${login_args[@]}" "$login_url"
 return_url="$(location "$e2e_dir/login-submit.headers")"
-if [[ -z "$return_url" ]]; then
+if [[ -z "$return_url" || "$return_url" == *'/login?'* || "$return_url" == */login ]]; then
   echo "--- Nextcloud login page headers ---" >&2
   cat "$e2e_dir/login.headers" >&2 || true
   echo "--- Nextcloud login page excerpt ---" >&2
@@ -123,7 +116,7 @@ if [[ -z "$return_url" ]]; then
   echo "--- Nextcloud login submit excerpt ---" >&2
   head -c 4096 "$e2e_dir/login-submit.html" >&2 || true
   echo >&2
-  fail 'Nextcloud login did not return to pending SSO request'
+  fail 'Nextcloud login did not establish the SSO return redirect'
 fi
 return_url="$(absolute_url "$return_url" http://e2e-nextcloud)"
 http --silent --show-error --dump-header /work/saml-response.headers --output /work/saml-response.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$return_url"

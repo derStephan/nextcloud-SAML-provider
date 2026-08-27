@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.1
+
+- Support Nextcloud's current `data-requesttoken` login-page attribute in the Kimai E2E flow, while retaining compatibility with hidden-input token templates.
+- Fail with focused diagnostics if Nextcloud redirects a login submission back to `/login` instead of the pending SSO request.
+
 ## 0.7.0
 
 - Replace brittle shell parsing of the generated SAML POST form in the Kimai E2E test with a dedicated HTML parser.

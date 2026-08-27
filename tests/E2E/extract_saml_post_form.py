@@ -9,15 +9,20 @@ class FormParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.in_form = False
-        self.result = {"action": "", "SAMLResponse": "", "RelayState": ""}
+        self.result = {"action": "", "SAMLResponse": "", "RelayState": "", "requesttoken": ""}
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
+        if "data-requesttoken" in values and not self.result["requesttoken"]:
+            self.result["requesttoken"] = values["data-requesttoken"]
         if tag.lower() == "form":
             self.in_form = True
             self.result["action"] = values.get("action", "")
-        elif tag.lower() == "input" and self.in_form:
+        elif tag.lower() == "input":
             name = values.get("name", "")
-            if name in self.result:
+            if name == "requesttoken" and not self.result["requesttoken"]:
+                self.result["requesttoken"] = values.get("value", "")
+            # Only SAML POST fields belong to the extracted SAML form payload.
+            if self.in_form and name in ("SAMLResponse", "RelayState"):
                 self.result[name] = values.get("value", "")
     def handle_endtag(self, tag):
         if tag.lower() == "form":

@@ -89,6 +89,9 @@ jobs:
           expected="$(gh api --paginate "repos/${REPOSITORY}/actions/runs/${E2E_RUN_ID}/jobs?per_page=100" --jq '[.jobs[] | select(.name | startswith("Nextcloud ")) | select(.conclusion == "success")] | length')"
           [[ "$expected" =~ ^[1-9][0-9]*$ ]] || { echo "Could not determine successful E2E matrix jobs." >&2; exit 1; }
           [[ ${#screenshots[@]} -eq $expected ]] || { echo "Expected ${expected} E2E screenshots, imported ${#screenshots[@]}. Refusing incomplete documentation release." >&2; exit 1; }
+          # The App Store does not discover files merely because they live in docs/.
+          # Publish each release-tested image through info.xml as a stable GitHub Raw URL.
+          REPOSITORY="$REPOSITORY" python3 -c 'from pathlib import Path; import os, re; info = Path("appinfo/info.xml"); text = info.read_text(); text = re.sub(r"\n    <screenshot>https://raw\.githubusercontent\.com/[^<]+/docs/admin-settings-e2e-nc[^<]+</screenshot>", "", text); files = sorted(Path("docs").glob("admin-settings-e2e-nc*.png")); assert files, "No imported admin screenshots are available for App Store metadata."; base = f"https://raw.githubusercontent.com/{os.environ["REPOSITORY"]}/main/docs/"; tags = "".join(f"\n    <screenshot>{base}{image.name}</screenshot>" for image in files); anchor = "    <repository>"; pos = text.find(anchor); assert pos >= 0, "Cannot find repository metadata anchor in appinfo/info.xml."; line_end = text.find("\n", pos); info.write_text(text[:line_end] + tags + text[line_end:]); print("Updated App Store screenshot metadata for: " + ", ".join(image.name for image in files))'
           echo "Imported ${#screenshots[@]} validated screenshots from E2E run ${E2E_RUN_ID}."
       - uses: shivammathur/setup-php@v2
         if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'

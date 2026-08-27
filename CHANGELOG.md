@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.31
+
+- Remove the internal-only App Store release runbook from `docs/`; it was not part of the user-facing App Store listing.
+- Make the release workflow write validated, target-specific E2E screenshot URLs into `appinfo/info.xml`, so current committed screenshots are displayed by the Nextcloud App Store instead of merely residing in `docs/`.
+
+## 0.7.30
+
+- Document screenshot import and validation as an explicit release-stage responsibility in the README, while keeping the E2E section focused on producing its evidence artifact.
+
 ## 0.7.29
 
 - Upload one populated admin-settings screenshot artifact for every successful Nextcloud/Kimai E2E matrix job.

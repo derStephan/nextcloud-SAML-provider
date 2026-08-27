@@ -257,7 +257,7 @@ The job runs these layers in order:
 5. **Positive browser SSO** — a real browser starts at Kimai, authenticates at Nextcloud, returns via the signed SAML POST, and must reach an authenticated Kimai page after an accepted ACS redirect.
 6. **Populated admin-page capture** — a fresh authenticated browser opens the public Nextcloud admin settings route and requires both IdP settings and the registered `Kimai E2E` Service Provider to be visible. It writes `docs/admin-settings-e2e-nc<target>.png` (for example, `docs/admin-settings-e2e-nc34.png`) from this populated page and adds it to the diagnostic artifact.
 
-The E2E tests do not parse or replay Nextcloud HTML, CSRF tokens, generated form actions, SAML values, internal Nextcloud APIs, or Kimai database tables. They use normal browser controls and public HTTP endpoints, then assert user-visible outcomes. Failed runs preserve screenshots, browser traces, HTTP metadata, and container logs. Successful runs upload each populated admin screenshot as a versioned E2E artifact. When the protected release workflow runs, it downloads only screenshots from the exact successful E2E run that triggered it, validates the PNG files and expected matrix count, and commits them before signing, tagging, and publishing the release. The released documentation therefore contains screenshots from the same test evidence as that release.
+The E2E tests do not parse or replay Nextcloud HTML, CSRF tokens, generated form actions, SAML values, internal Nextcloud APIs, or Kimai database tables. They use normal browser controls and public HTTP endpoints, then assert user-visible outcomes. Failed runs preserve screenshots, browser traces, HTTP metadata, and container logs. Successful runs upload each populated admin screenshot as a versioned E2E artifact for the release stage.
 
 Diagnostics are named with the app version, Nextcloud matrix target, GitHub run ID, and retry attempt, for example `kimai-saml-browser-v0.7.26-nc34-run123456789-attempt1.zip`.
 
@@ -268,13 +268,15 @@ A release workflow can run only after the green Kimai workflow and only for a su
 1. confirms that the tested SHA remains the current `main` tip;
 2. derives the tested stable Nextcloud compatibility range;
 3. decides whether a release is required (a scheduled compatibility check skips a release when the range is unchanged);
-4. updates release metadata, creates a release commit and annotated tag;
-5. signs the archive with the protected Nextcloud signing key, verifies `appinfo/signature.json`, and creates `saml_provider.tar.gz`;
-6. creates a GitHub Release and attaches that signed archive.
+4. downloads the populated admin-page screenshot artifacts from the **exact successful Kimai E2E workflow run** that triggered this release;
+5. requires one target-named, decodable PNG for every successful E2E matrix job, copies them into `docs/` (for example `docs/admin-settings-e2e-nc34.png`), and aborts rather than publishing stale or incomplete screenshot documentation;
+6. updates release metadata, commits the validated screenshots together with the release metadata, and creates an annotated tag;
+7. signs the archive with the protected Nextcloud signing key, verifies `appinfo/signature.json`, and creates `saml_provider.tar.gz`;
+8. creates a GitHub Release and attaches that signed archive.
 
 The Nextcloud App Store is deliberately **opt-in**. By default, the workflow creates the signed GitHub Release but does **not** publish to the App Store. Publication happens only when the repository variable `PUBLISH_TO_APPSTORE` is set exactly to `true`; only then is the protected `NEXTCLOUD_APPSTORE_TOKEN` used to submit the already published GitHub Release archive. This makes the default behavior a practical release sign-off/dry run for App Store delivery.
 
-The App Store listing itself is generated from `appinfo/info.xml`, including summary, description, license, supported Nextcloud versions, repository URL, issue tracker URL, and author. Manual recovery and first-release procedures are documented in [docs/APP_STORE_RELEASE.md](docs/APP_STORE_RELEASE.md).
+The App Store listing is generated from `appinfo/info.xml`, including summary, description, license, supported Nextcloud versions, repository URL, issue tracker URL, author, and public screenshot URLs. The release workflow writes those screenshot URLs from the validated E2E images committed to `docs/`; a file merely existing in `docs/` is not shown by the App Store until it is referenced here.
 
 ## Security notes
 
@@ -307,11 +309,10 @@ Not implemented:
 
 ## App Store and releases
 
-The App Store listing is generated from the metadata in `appinfo/info.xml`, including the summary, long description, license, supported Nextcloud versions, repository URL, issue tracker URL, and author.
+The App Store listing is generated from `appinfo/info.xml`, including the summary, long description, license, supported Nextcloud versions, repository URL, issue tracker URL, author, and public screenshot URLs.
 
-The **Release app** workflow automates patch releases after successful **Unit tests** and **Nextcloud integration tests** on `main`. It updates the patch version, derives the Nextcloud `min-version` and `max-version` from the green stable integration matrix, signs the final archive, creates a GitHub Release, and publishes the archive to the Nextcloud App Store. A scheduled matrix check publishes only when the supported stable Nextcloud range changes. Release signing material is available exclusively to the protected `release` environment.
+The **Release app** workflow runs only after the complete green chain — Unit tests, Nextcloud integration matrix, and Kimai browser E2E — for `main`. It imports and validates the exact triggering E2E screenshots, updates the patch version and tested compatibility range, signs the final archive, and creates a GitHub Release. App Store submission remains opt-in through `PUBLISH_TO_APPSTORE=true`. Release signing material is available exclusively to the protected `release` environment.
 
-Manual recovery and first-release steps are documented in [docs/APP_STORE_RELEASE.md](docs/APP_STORE_RELEASE.md).
 
 ## License
 

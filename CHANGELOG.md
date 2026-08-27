@@ -1,8 +1,13 @@
- # Changelog
+# Changelog
 
 All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
+
+## 0.7.18
+
+- Remove the fixed-value coverage-gate test fixture; production coverage remains enforced by the gate itself without encoding one historical percentage.
+- Fix the TemplateResponse unit-test double to retain the attached content-security policy, allowing the meaningful ACS-origin CSP regression test to inspect the same response state as production.
 
 ## 0.7.17
 

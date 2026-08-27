@@ -61,7 +61,7 @@ namespace OCP\AppFramework\Http {
     class Response { public function __construct(public int $status=200) {} }
     class DataResponse extends Response { public function __construct(public mixed $data=[], int $status=200) { parent::__construct($status); } }
     class RedirectResponse extends Response { public function __construct(public string $redirectURL) { parent::__construct(302); } }
-    class TemplateResponse extends Response { public function __construct(public string $appName, public string $templateName, public array $params=[], public string $renderAs='') { parent::__construct(); } public function setContentSecurityPolicy(mixed $csp): void {} }
+    class TemplateResponse extends Response { public mixed $contentSecurityPolicy = null; public function __construct(public string $appName, public string $templateName, public array $params=[], public string $renderAs='') { parent::__construct(); } public function setContentSecurityPolicy(mixed $csp): void { $this->contentSecurityPolicy = $csp; } }
     class DataDownloadResponse extends Response { public function __construct(public string $data, public string $filename, public string $contentType) { parent::__construct(); } }
     class ContentSecurityPolicy { public array $domains=[]; public function addAllowedFormActionDomain(string $domain): void { $this->domains[]=$domain; } }
 }

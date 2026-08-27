@@ -88,8 +88,8 @@ if [[ ! "$kimai_metadata_status" =~ ^2[0-9][0-9]$ ]]; then
 fi
 printf '%s' "$metadata" | grep -q EntityDescriptor || fail 'Kimai SAML metadata response has no EntityDescriptor'
 printf '%s' "$metadata" | grep -q 'http://e2e-kimai:8001/auth/saml/acs' || fail 'Kimai metadata has unexpected ACS'
-acs_status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --output /dev/null --write-out '%{http_code}' -X POST http://e2e-kimai:8001/auth/saml/acs)" || fail 'Could not contact Kimai SAML ACS endpoint'
-[[ "$acs_status" != 404 ]] || fail 'Kimai SAML ACS endpoint is disabled'
+# Do not probe the ACS with an empty POST: that intentionally invalid request
+# creates a misleading Kimai error. The browser flow below is the ACS validation.
 
 # Drive the entire user journey in a real browser. No Nextcloud login HTML,
 # CSRF representation, form action, or SAML POST form is parsed or replayed.
@@ -117,15 +117,28 @@ echo '================================================================='
 echo 'KIMAI SAML BROWSER E2E STARTS - copy logs from this line'
 echo 'Playwright SDK and browser image: 1.62.1'
 echo '================================================================='
-# Run from /work so Node resolves /work/node_modules/playwright. The version
-# matches the pinned image, whose Chromium is used without a second download.
-docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
-  --volume "$playwright_work:/work" \
-  --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/work/kimai-saml-browser.mjs:ro" \
-  --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
-  --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
-  "$playwright_image" \
-  node /work/kimai-saml-browser.mjs
+# Run isolated negative and positive browser sessions. Both use the same real
+# Kimai -> Nextcloud route; only the negative session uses wrong IdP credentials.
+run_browser() {
+  local mode="$1"
+  docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
+    --volume "$playwright_work:/work" \
+    --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/work/kimai-saml-browser.mjs:ro" \
+    --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
+    --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
+    --env E2E_SSO_MODE="$mode" \
+    "$playwright_image" \
+    node /work/kimai-saml-browser.mjs
+}
+
+echo 'Running negative IdP authentication test'
+run_browser negative
+negative_user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
+[[ "$negative_user_count" == '0' ]] || fail "Invalid Nextcloud credentials created a Kimai SAML user (count: ${negative_user_count:-none})"
+echo 'Invalid Nextcloud credentials correctly produced no Kimai login or SAML user.'
+
+echo 'Running positive IdP authentication test'
+run_browser positive
 rm -rf "$playwright_work"
 user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
 [[ "$user_count" == '1' ]] || fail "Kimai did not import the browser-authenticated SAML user (count: ${user_count:-none})"

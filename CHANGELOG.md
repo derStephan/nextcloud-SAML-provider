@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.21
+
+- Add a negative browser SSO scenario: deliberately invalid Nextcloud credentials must remain on the IdP login page, must not invoke Kimai ACS, and must not create a Kimai SAML user.
+- Run the negative scenario in an isolated browser session before the positive end-to-end SSO proof, retaining browser-flow artifacts for both paths.
+
+## 0.7.20
+
+- Remove the artificial empty POST probe to Kimai's ACS, which always generated a misleading “SAML Response not found” error in container diagnostics.
+- Require and record the real browser ACS response as a successful HTTP redirect before accepting the authenticated Kimai destination.
+- Keep the independent database assertion that exactly one expected SAML-authenticated Kimai user was imported.
+
+## 0.7.19
+
+- Fix the browser E2E race after Nextcloud login: accept either a visible Nextcloud SAML POST form or an already completed Kimai session caused by the form's normal auto-submit.
+- Retain the visible-form fallback click only when required, while accepting Kimai's legitimate first-run wizard as authenticated SSO completion.
+
 ## 0.7.18
 
 - Remove the fixed-value coverage-gate test fixture; production coverage remains enforced by the gate itself without encoding one historical percentage.

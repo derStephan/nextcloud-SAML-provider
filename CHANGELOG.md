@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.12
+
+- Install npm 12.0.2 into a writable ephemeral prefix instead of attempting to replace the image-owned system npm under `/usr/lib`, eliminating the permission failure while retaining unprivileged browser execution.
+- Use that verified npm 12.0.2 binary for the matching Playwright 1.62.1 SDK installation and import check.
+
 ## 0.7.11
 
 - Align the runtime-installed Playwright Node SDK with the Playwright 1.62.1 Docker image, fixing the Chromium executable-version mismatch caused by the previously retained 1.54.0 package.

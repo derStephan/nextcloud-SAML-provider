@@ -102,10 +102,10 @@ mkdir -p "$workspace/build/e2e/browser-artifacts"
 playwright_work="$workspace/build/e2e/playwright-work"
 rm -rf "$playwright_work"
 mkdir -p "$playwright_work"
-# Install the current npm CLI to a writable, ephemeral prefix. A system-global
-# install targets /usr/lib and fails under the unprivileged test user; using /work
-# keeps both setup and browser execution non-root.
-playwright_setup='npm_cmd=$(printf %s%s np m); prefix=/work/npm-global; $npm_cmd install --global --prefix "$prefix" npm@12.0.2 && npm_cmd="$prefix/bin/npm" && test "$($npm_cmd --version)" = 12.0.2 && cd /work && $npm_cmd install --no-save --ignore-scripts playwright@1.62.1 && $npm_cmd exec -- node -e "import(\"playwright\").then(({chromium}) => { if (!chromium) process.exit(1) })"'
+# Bootstrap npm 12 as a local dependency, never as a global self-upgrade.
+# npm self-updates in global mode ignore the writable prefix in this image and try
+# to rename /usr/lib/node_modules/npm. The local binary stays under /work.
+playwright_setup='npm_cmd=$(printf %s%s np m); tool_dir=/work/npm-tool; $npm_cmd install --prefix "$tool_dir" --no-save --ignore-scripts npm@12.0.2 && npm_cmd="$tool_dir/node_modules/.bin/npm" && test "$($npm_cmd --version)" = 12.0.2 && cd /work && $npm_cmd install --no-save --ignore-scripts playwright@1.62.1 && $npm_cmd exec -- node -e "import(\"playwright\").then(({chromium}) => { if (!chromium) process.exit(1) })"'
 docker run --rm --user "$(id -u):$(id -g)" \
   --volume "$playwright_work:/work" \
   --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \

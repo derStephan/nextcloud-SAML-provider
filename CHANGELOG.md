@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.13
+
+- Replace the npm 12 bootstrap global install with a local installation under `/work/npm-tool`; npm no longer attempts to rename the image-owned `/usr/lib/node_modules/npm` directory.
+- Continue verifying npm 12.0.2 and use only its local binary for the matching Playwright SDK installation.
+
 ## 0.7.12
 
 - Install npm 12.0.2 into a writable ephemeral prefix instead of attempting to replace the image-owned system npm under `/usr/lib`, eliminating the permission failure while retaining unprivileged browser execution.

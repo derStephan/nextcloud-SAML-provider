@@ -81,16 +81,21 @@ status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent -
 
 # Drive the entire user journey in a real browser. No Nextcloud login HTML,
 # CSRF representation, form action, or SAML POST form is parsed or replayed.
+# Pull before the trace marker: the marker now denotes the actual browser test.
+playwright_image="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.54.0-noble}"
+docker pull "$playwright_image"
+mkdir -p "$workspace/build/e2e/browser-artifacts"
 echo '================================================================='
 echo 'KIMAI SAML BROWSER E2E STARTS - copy logs from this line'
 echo '================================================================='
-mkdir -p "$workspace/build/e2e/browser-artifacts"
+# The official image provides its Node dependencies at /ms-playwright/node_modules.
+# Mounting the ES module below that directory gives its resolver the expected parent.
 docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
-  --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/work/kimai-saml-browser.mjs:ro" \
+  --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/ms-playwright/kimai-saml-browser.mjs:ro" \
   --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
   --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
-  "${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.54.0-noble}" \
-  node /work/kimai-saml-browser.mjs
+  "$playwright_image" \
+  node /ms-playwright/kimai-saml-browser.mjs
 user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
 [[ "$user_count" == '1' ]] || fail "Kimai did not import the browser-authenticated SAML user (count: ${user_count:-none})"
 echo 'Kimai SAML browser end-to-end test passed.'

@@ -4,11 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.6
+
+- Load the Playwright container image before the browser-test trace marker, so the marker represents the actual start of the Chromium SSO flow.
+- Mount and execute the browser test under the official Playwright image dependency root, allowing Node.js to resolve the image-bundled `playwright` package without project-local installation.
+
 ## 0.7.5
 
 - Run the Kimai SAML end-to-end gate across the same dynamically discovered Nextcloud stable and explicit RC/beta Docker-image matrix as the integration workflow.
 - Drive the complete Kimai-initiated SAML login with headless Chromium and verify the imported Kimai SAML user, rather than parsing Nextcloud login HTML, request tokens, or form actions.
 - Preserve failure diagnostics with per-matrix browser screenshots and container logs, while keeping the release pipeline fail-closed.
+- Pull the Playwright image before the browser-test trace marker and execute the mounted browser module below the image dependency root so Node resolves its bundled package.
 
 ## 0.7.4
 

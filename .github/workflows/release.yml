@@ -77,12 +77,10 @@ jobs:
           [[ ${#screenshots[@]} -gt 0 ]] || { echo "E2E artifacts did not contain target-named admin screenshots. Refusing to release." >&2; exit 1; }
           for screenshot in "${screenshots[@]}"; do
             filename="$(basename "$screenshot")"
-            python3 - "$screenshot" <<'PYTHON'
-          from PIL import Image
-          import sys
-          with Image.open(sys.argv[1]) as image:
-              image.verify()
-          PYTHON
+            # Validate PNG structure using only Python's standard library. GitHub's
+            # runner does not guarantee Pillow, and no third-party package is needed
+            # to reject a non-PNG, truncated header, or invalid image dimensions.
+            python3 -c 'import struct, sys; data = open(sys.argv[1], "rb").read(24); assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"; assert data[12:16] == b"IHDR", "missing PNG IHDR"; width, height = struct.unpack(">II", data[16:24]); assert width > 0 and height > 0, "invalid PNG dimensions"' "$screenshot"
             cp "$screenshot" "docs/$filename"
             echo "Imported tested screenshot: docs/$filename"
           done

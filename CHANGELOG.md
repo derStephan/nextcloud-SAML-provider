@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.33
+
+- Make release-time E2E screenshot validation independent of Pillow: validate the PNG signature, IHDR chunk, and non-zero dimensions with Python's standard library, which is available on GitHub-hosted runners.
+
 ## 0.7.32
 
 - Fix the admin-settings capture after successful SAML E2E: retain the local Playwright work directory until the final browser screenshot is complete, then remove it.

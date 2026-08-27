@@ -36,7 +36,7 @@ The app sends `uid`, `displayName`, and `mail` attributes when they are availabl
 
 See the project README for setup instructions, a complete Kimai example, security guidance, and limitations.
 ]]></description>
-    <version>0.7.32</version>
+    <version>0.7.33</version>
     <licence>MIT</licence>
     <author homepage="https://github.com/derStephan">derStephan</author>
     <namespace>SAMLProvider</namespace>

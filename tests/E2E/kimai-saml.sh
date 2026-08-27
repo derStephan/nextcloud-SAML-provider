@@ -155,7 +155,6 @@ echo 'Invalid Nextcloud credentials correctly produced no Kimai ACS request.'
 
 echo 'Running positive IdP authentication test'
 run_browser positive
-rm -rf "$playwright_work"
 # A successful post-ACS browser navigation is the public, user-visible Kimai contract.
 # Do not depend on Kimai's internal user-table names or persistence layout.
 echo 'Kimai accepted the signed SAML response and established a browser session.'
@@ -176,6 +175,9 @@ docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
   node /work/nextcloud-admin-screenshot.mjs
 [[ -s "$workspace/docs/admin-settings-e2e-nc${screenshot_target}.png" ]] || fail "Admin settings screenshot was not written to docs/admin-settings-e2e-nc${screenshot_target}.png"
 echo "Captured docs/admin-settings-e2e-nc${screenshot_target}.png from the populated E2E admin interface."
+# Keep the locally installed Playwright module until every browser-based check,
+# including the documentation capture, has completed.
+rm -rf "$playwright_work"
 echo 'Kimai SAML browser end-to-end test passed.'
 completed=true
 echo '=========================================================='

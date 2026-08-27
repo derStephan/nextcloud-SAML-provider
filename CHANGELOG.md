@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.32
+
+- Fix the admin-settings capture after successful SAML E2E: retain the local Playwright work directory until the final browser screenshot is complete, then remove it.
+- Remove the unused legacy `docs/appstore-screenshot.png`; it was not referenced by App Store metadata and is superseded by validated per-Nextcloud E2E screenshots.
+
 ## 0.7.31
 
 - Remove the internal-only App Store release runbook from `docs/`; it was not part of the user-facing App Store listing.

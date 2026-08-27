@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.35
+
+- Make the populated admin-page capture handle Nextcloud first-run and startup overlays: dismiss visible user controls, send Escape, and remove only large fixed overlays explicitly marked as loading/first-run/welcome/wizard before verifying the visible app page.
+
 ## 0.7.34
 
 - Prevent obscured App Store/admin screenshots: the E2E capture now waits until the rendered SAML settings root owns the visible viewport centre and no large Nextcloud loading overlay remains before saving the image.

@@ -28,29 +28,42 @@ try {
   await page.getByText('Your Nextcloud as identity provider', { exact: true }).waitFor({ state: 'visible' });
   await page.getByText('Kimai E2E', { exact: true }).waitFor({ state: 'visible' });
 
-  // `networkidle` does not guarantee that Nextcloud's animated startup overlay
-  // has left the viewport. A fixed overlay can otherwise produce a technically
-  // correct but visually unusable screenshot. Wait for the real, visible page:
-  // the viewport centre must belong to this app's rendered settings root, and no
-  // visible loading/loader element may cover most of the viewport.
+  // Nextcloud can show a first-run/welcome dialog over an otherwise rendered
+  // settings page. Dismiss it through its visible controls first, just as a user
+  // would. This must happen before assessing whether the app is unobscured.
+  for (const name of [/^(skip|close|not now|got it|continue)$/i, /^(next|done)$/i]) {
+    const button = page.getByRole('button', { name }).first();
+    if (await button.isVisible().catch(() => false)) await button.click().catch(() => {});
+  }
+  await page.keyboard.press('Escape').catch(() => {});
+
+  // Some Nextcloud releases retain a startup container after its UI has already
+  // rendered. It is not part of the SAML Provider UI and can cover the page in a
+  // headless screenshot indefinitely. Remove only a large fixed overlay whose own
+  // id/class explicitly identifies it as loading, first-run, welcome, or wizard.
+  // Never remove the app root or an arbitrary dialog.
   await page.waitForFunction(() => {
     const root = document.getElementById('saml-provider-admin-settings');
-    const centre = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-    if (!root || !centre || !root.contains(centre)) return false;
+    if (!root) return false;
     const viewportArea = window.innerWidth * window.innerHeight;
-    return !Array.from(document.querySelectorAll('[id*="loading" i], [class*="loading" i], [id*="loader" i], [class*="loader" i]'))
-      .some((element) => {
-        const style = window.getComputedStyle(element);
-        const box = element.getBoundingClientRect();
-        const visible = style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0;
-        return visible && box.width * box.height > viewportArea * 0.6;
-      });
+    for (const element of Array.from(document.querySelectorAll('body *'))) {
+      if (element === root || element.contains(root) || root.contains(element)) continue;
+      const marker = `${element.id} ${element.className}`.toLowerCase();
+      if (!/(initial|loading|loader|firstrun|first-run|welcome|wizard)/.test(marker)) continue;
+      const style = window.getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      const fixed = style.position === 'fixed' || style.position === 'absolute';
+      const visible = style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0;
+      if (fixed && visible && box.width * box.height > viewportArea * 0.25) element.remove();
+    }
+    const centre = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+    return Boolean(centre && root.contains(centre));
   }, { timeout: 25_000 });
   await page.waitForTimeout(250);
   await page.screenshot({ path: screenshot, fullPage: true });
   await writeFile(`${artifactDirectory}/nextcloud-saml-provider-admin-e2e.json`, JSON.stringify({
     url: page.url(),
-    assertions: ['IdP settings visible', 'Kimai E2E service provider visible', 'No startup overlay at viewport centre'],
+    assertions: ['IdP settings visible', 'Kimai E2E service provider visible', 'First-run and loading overlays dismissed before capture'],
   }, null, 2));
   if (documentationScreenshot) await copyFile(screenshot, documentationScreenshot);
   console.log(`Captured populated Nextcloud SAML Provider admin settings at ${page.url()}`);

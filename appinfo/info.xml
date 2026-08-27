@@ -36,7 +36,7 @@ The app sends `uid`, `displayName`, and `mail` attributes when they are availabl
 
 See the project README for setup instructions, a complete Kimai example, security guidance, and limitations.
 ]]></description>
-    <version>0.8.0</version>
+    <version>0.8.1</version>
     <licence>MIT</licence>
     <author homepage="https://github.com/derStephan">derStephan</author>
     <namespace>SAMLProvider</namespace>
@@ -44,8 +44,10 @@ See the project README for setup instructions, a complete Kimai example, securit
     <website>https://github.com/derStephan/nextcloud-SAML-provider</website>
     <bugs>https://github.com/derStephan/nextcloud-SAML-provider/issues</bugs>
     <repository>https://github.com/derStephan/nextcloud-SAML-provider.git</repository>
+    <screenshot>https://raw.githubusercontent.com/derStephan/nextcloud-SAML-provider/main/docs/admin-settings-e2e-nc33.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/derStephan/nextcloud-SAML-provider/main/docs/admin-settings-e2e-nc34.png</screenshot>
     <dependencies>
-        <nextcloud min-version="33"/>
+        <nextcloud min-version="33" max-version="34"/>
     </dependencies>
     <settings>
         <admin>OCA\SAMLProvider\Settings\Admin</admin>

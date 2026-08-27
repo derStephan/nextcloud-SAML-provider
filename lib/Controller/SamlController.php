@@ -81,9 +81,16 @@ class SamlController extends Controller {
         }
 
         if (!$this->userSession->isLoggedIn()) {
-            // Bounce through Nextcloud's own login, then come back here
-            $currentUrl = $this->urlGenerator->linkToRouteAbsolute('saml_provider.saml.sso')
-                . '?' . ($_SERVER['QUERY_STRING'] ?? '');
+            // The core login redirect target must stay a same-origin path. An
+            // absolute URL is resolved again by some supported server versions.
+            $ssoUrl = $this->urlGenerator->linkToRouteAbsolute('saml_provider.saml.sso');
+            $currentUrl = (string)(parse_url($ssoUrl, PHP_URL_PATH) ?? '/');
+            $queryString = isset($_SERVER['QUERY_STRING']) && is_string($_SERVER['QUERY_STRING'])
+                ? $_SERVER['QUERY_STRING']
+                : '';
+            if ($queryString !== '') {
+                $currentUrl .= '?' . $queryString;
+            }
             return new RedirectResponse(
                 $this->urlGenerator->linkToRouteAbsolute('core.login.showLoginForm', [
                     'redirect_url' => $currentUrl,

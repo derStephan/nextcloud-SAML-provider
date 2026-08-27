@@ -94,7 +94,7 @@ acs_status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --sile
 # Drive the entire user journey in a real browser. No Nextcloud login HTML,
 # CSRF representation, form action, or SAML POST form is parsed or replayed.
 # Pull before the trace marker: the marker now denotes the actual browser test.
-playwright_image="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.54.0-noble}"
+playwright_image="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
 docker pull "$playwright_image"
 mkdir -p "$workspace/build/e2e/browser-artifacts"
 # The browser image supplies browsers and OS dependencies, but no importable

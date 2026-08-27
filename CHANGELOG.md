@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.10
+
+- Fix the Nextcloud login return target to be an origin-safe relative SSO route, preventing the invalid `/http://e2e-nextcloud/...` return path.
+- Add a controller regression assertion for relative login return targets.
+- Upgrade the Playwright image to 1.62.1 and use `actions/upload-artifact@v5` for the Node 24 runtime.
+
 ## 0.7.9
 
 - Place Kimai SAML `baseurl` under the documented `connection` section and enable test-only Kimai SAML debug output.

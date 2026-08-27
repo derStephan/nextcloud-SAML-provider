@@ -48,7 +48,7 @@ jobs:
           E2E_TARGET_SLUG: ${{ matrix.target.label }}
           KIMAI_IMAGE: kimai/kimai2:apache
           MARIADB_IMAGE: mariadb:11.4
-          PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.54.0-noble
+          PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.62.1-noble
         run: bash tests/E2E/kimai-saml.sh
       - name: Collect container diagnostics
         if: failure()
@@ -60,7 +60,7 @@ jobs:
           done
       - name: Upload browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: kimai-saml-browser-${{ matrix.target.label }}
           path: build/e2e/browser-artifacts

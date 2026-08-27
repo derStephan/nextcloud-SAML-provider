@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.9
+
+- Place Kimai SAML `baseurl` under the documented `connection` section and enable test-only Kimai SAML debug output.
+- Replace opaque Kimai metadata failures with explicit HTTP-status, response-body, and container-log diagnostics.
+- Create E2E diagnostic artifacts before Kimai metadata validation and collect container logs into the uploaded artifact on every failure.
+
 ## 0.7.8
 
 - Configure Kimai SAML `baseurl` explicitly as the complete E2E `/auth/saml/` URL, preventing the SAML adapter from resolving an absolute Nextcloud SSO endpoint as a relative path and duplicating the IdP host.

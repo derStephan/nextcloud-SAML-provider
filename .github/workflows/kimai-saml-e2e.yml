@@ -50,19 +50,22 @@ jobs:
           MARIADB_IMAGE: mariadb:11.4
           PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.54.0-noble
         run: bash tests/E2E/kimai-saml.sh
+      - name: Collect container diagnostics
+        if: failure()
+        run: |
+          mkdir -p build/e2e/browser-artifacts
+          docker ps -a | tee build/e2e/browser-artifacts/docker-ps.txt
+          for container in e2e-nextcloud e2e-kimai e2e-mariadb; do
+            docker logs "$container" 2>&1 | tee "build/e2e/browser-artifacts/${container}.log" || true
+          done
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: kimai-saml-browser-${{ matrix.target.label }}
           path: build/e2e/browser-artifacts
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 7
-      - name: Show container diagnostics
-        if: failure()
-        run: |
-          docker ps -a
-          for container in e2e-nextcloud e2e-kimai e2e-mariadb; do docker logs "$container" || true; done
       - name: Remove containers
         if: always()
         run: |

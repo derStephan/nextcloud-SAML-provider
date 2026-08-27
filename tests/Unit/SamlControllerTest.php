@@ -6,7 +6,7 @@ namespace OCA\SAMLProvider\Tests\Unit;
 use OCA\SAMLProvider\Controller\SamlController;
 use OCA\SAMLProvider\Db\{ServiceProvider, ServiceProviderMapper};
 use OCA\SAMLProvider\Service\{IdpConfigService, SamlService};
-use OCA\SAMLProvider\Tests\Support\{AppConfig, NullLogger, Request, RouteUrlGenerator, Server, Session, UrlGenerator, User};
+use OCA\SAMLProvider\Tests\Support\{AppConfig, NullLogger, Request, RouteUrlGenerator, Session, UrlGenerator, User};
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -23,7 +23,6 @@ final class SamlControllerTest extends TestCase {
         $this->mapper = new ServiceProviderMapper();
         $this->idp = new IdpConfigService(new AppConfig(), new UrlGenerator());
         $this->urls = new RouteUrlGenerator();
-        \OC::$server = new Server();
     }
 
     private function controller(Request $request, Session $session, ?SamlService $service = null): SamlController {

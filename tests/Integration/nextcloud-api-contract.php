@@ -84,7 +84,11 @@ if (!class_exists($entityClass)) {
     }
 }
 if ($missing !== []) {
-    fwrite(STDERR, "Nextcloud public API contract mismatch:\n- " . implode("\n- ", $missing) . "\n");
+    fwrite(STDERR, "NEXTCLOUD PUBLIC API PREFLIGHT: FAILED\n"
+        . "The selected Nextcloud release no longer provides a public OCP API used by this app.\n"
+        . "This is an upstream compatibility finding; the browser SSO test has not started.\n"
+        . "Missing or incompatible contract entries:\n- " . implode("\n- ", $missing) . "\n"
+        . "Action: review the documented OCP replacement, update the app deliberately, and extend this contract.\n");
     exit(1);
 }
-echo "Nextcloud public API contract passed for " . \OC_Util::getVersionString() . "\n";
+echo "NEXTCLOUD PUBLIC API CONTRACT: PASSED for target " . (getenv('NEXTCLOUD_VERSION') ?: 'unknown') . "\n";

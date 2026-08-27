@@ -30,5 +30,3 @@ final class Session implements \OCP\IUserSession { public bool $loggedIn=false; 
 final class L10N implements \OCP\IL10N { public function t(string $text,array $parameters=[]):string{return $text;} }
 final class InitialState implements \OCP\AppFramework\Services\IInitialState { public array $values=[]; public function provideInitialState(string $key,mixed $value):void{$this->values[$key]=$value;} }
 final class RouteUrlGenerator extends UrlGenerator { public function linkToRouteAbsolute(string $route,array $params=[]):string{return 'https://cloud.example.test/'.$route.(isset($params['spId'])?'/'.$params['spId']:'');} public function linkTo(string $app,string $file):string{return '/apps/'.$app.'/'.$file;} public function getBaseUrl():string{return '/';} }
-final class NonceManager { public function getNonce(): string { return 'test-nonce'; } }
-final class Server { public function getContentSecurityPolicyNonceManager(): NonceManager { return new NonceManager(); } }

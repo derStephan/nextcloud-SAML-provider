@@ -48,6 +48,8 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: dom, openssl
           coverage: xdebug
+      - name: Public API preflight
+        run: bash tests/Integration/public-api-preflight.sh
       - run: composer install --no-interaction --prefer-dist
       - run: composer test:coverage
       - name: Upload coverage report

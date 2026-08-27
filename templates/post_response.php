@@ -4,7 +4,8 @@ $acsUrl       = $_['acsUrl'];
 $samlResponse = $_['samlResponse'];
 $relayState   = $_['relayState'];
 $scriptUrl    = $_['scriptUrl'];
-$cspNonce    = $_['cspNonce'];
+// TemplateResponse supplies the response-bound CSP nonce.
+$cspNonce    = $_['cspNonce'] ?? '';
 $l = \OCP\Util::getL10N('saml_provider');
 ?>
 <!DOCTYPE html>

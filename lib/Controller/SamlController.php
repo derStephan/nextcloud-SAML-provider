@@ -163,9 +163,6 @@ class SamlController extends Controller {
             'samlResponse' => $samlResponse,
             'relayState'   => $relayState,
             'scriptUrl'    => $this->urlGenerator->linkTo('saml_provider', 'js/post_response.js'),
-            // Nextcloud 33 uses a strict-dynamic CSP. External scripts must carry
-            // the nonce generated for this exact response.
-            'cspNonce'    => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
         ], 'blank');
         $csp = new ContentSecurityPolicy();
         // Nextcloud 34 validates this API argument as a host source, not a full

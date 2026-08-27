@@ -69,4 +69,3 @@ namespace OCP\AppFramework\Http\Attribute { #[\Attribute] class AuthorizedAdminS
 namespace OCP\AppFramework\Services { interface IInitialState { public function provideInitialState(string $key, mixed $value): void; } }
 namespace OCP\Settings { interface ISettings { public function getForm(): \OCP\AppFramework\Http\TemplateResponse; public function getSection(): string; public function getPriority(): int; } interface IIconSection { public function getID(): string; public function getName(): string; public function getPriority(): int; public function getIcon(): string; } }
 namespace OCP { class Util { public static function addScript(string $app,string $script): void {} public static function addStyle(string $app,string $style): void {} } }
-namespace { class OC { public static object $server; } }

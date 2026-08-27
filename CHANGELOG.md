@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.26
+
+- Add a mandatory public-API preflight that scans application and test code for private Nextcloud APIs before any functional test runs. It reports the exact source location and replacement direction instead of allowing an opaque browser timeout.
+- Run the documented `OCP` API contract against every selected real Nextcloud version before SAML provisioning and classify missing interfaces as an upstream compatibility finding.
+- Add a Kimai public-HTTP preflight: validate its SAML metadata and confirm that its SAML login endpoint redirects to the configured IdP before Playwright starts.
+- Remove unit-test fixtures for the unstable `OC::$server` nonce locator and remove Kimai private-database assertions from browser E2E coverage. The E2E test now verifies public, user-visible SAML outcomes only.
+- Include app version, Nextcloud target, run ID, and retry attempt in diagnostic artifact names.
+
+## 0.7.25
+
+- Fix positive SSO rendering on Nextcloud 34: use the response-bound CSP nonce that Nextcloud supplies to templates instead of calling the internal `OC::$server->getContentSecurityPolicyNonceManager()` locator, which no longer exists in Nextcloud 34 and caused an HTTP 500.
+- Name failed browser-E2E diagnostics with the app version, Nextcloud matrix target, GitHub run ID, and retry attempt. The artifact's downloaded ZIP filename is therefore unambiguous across runs.
+
 ## 0.7.24
 
 - Preserve the exact Nextcloud internal exception log as a failed browser-E2E artifact before containers are cleaned up. This distinguishes CSP helper input validation from any other server-side error and records its stacktrace and source location.

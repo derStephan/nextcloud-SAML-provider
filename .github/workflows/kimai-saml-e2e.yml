@@ -50,6 +50,16 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+      - id: app-version
+        name: Read app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' appinfo/info.xml)"
+          [[ -n "$version" ]] || { echo "Could not read the app version." >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Public API preflight
+        run: bash tests/Integration/public-api-preflight.sh
       - name: Run browser SAML end-to-end test
         env:
           NEXTCLOUD_IMAGE: ${{ matrix.target.image }}
@@ -75,7 +85,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: kimai-saml-browser-${{ matrix.target.label }}
+          name: kimai-saml-browser-v${{ steps.app-version.outputs.version }}-nc${{ matrix.target.label }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
           path: build/e2e/browser-artifacts
           if-no-files-found: error
           retention-days: 7

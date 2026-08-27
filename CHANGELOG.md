@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.14
+
+- Standardize the Kimai E2E matrix-discovery step with the Nextcloud integration workflow: matching labels, explicit stable/RC-beta outcomes, and the discovered matrix in the log.
+- Bootstrap and integrity-verify npm 12.0.2 directly with Node 24, without executing the image-provided npm 11 CLI or suppressing its update notice.
+- Add structured browser-flow diagnostics with navigation and relevant response events, plus post-login and failure screenshots and HTML captures.
+
 ## 0.7.13
 
 - Replace the npm 12 bootstrap global install with a local installation under `/work/npm-tool`; npm no longer attempts to rename the image-owned `/usr/lib/node_modules/npm` directory.

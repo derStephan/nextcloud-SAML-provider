@@ -105,9 +105,10 @@ mkdir -p "$playwright_work"
 # Bootstrap npm 12 as a local dependency, never as a global self-upgrade.
 # npm self-updates in global mode ignore the writable prefix in this image and try
 # to rename /usr/lib/node_modules/npm. The local binary stays under /work.
-playwright_setup='npm_cmd=$(printf %s%s np m); tool_dir=/work/npm-tool; $npm_cmd install --prefix "$tool_dir" --no-save --ignore-scripts npm@12.0.2 && npm_cmd="$tool_dir/node_modules/.bin/npm" && test "$($npm_cmd --version)" = 12.0.2 && cd /work && $npm_cmd install --no-save --ignore-scripts playwright@1.62.1 && $npm_cmd exec -- node -e "import(\"playwright\").then(({chromium}) => { if (!chromium) process.exit(1) })"'
+playwright_setup='node /work/bootstrap-npm.mjs && npm_cmd="node /work/npm-tool/bin/npm-cli.js" && test "$($npm_cmd --version)" = 12.0.2 && cd /work && $npm_cmd install --no-save --ignore-scripts --no-update-notifier playwright@1.62.1 && node -e "import(\"playwright\").then(({chromium}) => { if (!chromium) process.exit(1) })"'
 docker run --rm --user "$(id -u):$(id -g)" \
   --volume "$playwright_work:/work" \
+  --volume "$workspace/tests/E2E/bootstrap-npm.mjs:/work/bootstrap-npm.mjs:ro" \
   --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
   --env npm_config_cache=/tmp/npm-cache \
   "$playwright_image" \

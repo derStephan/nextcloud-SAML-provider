@@ -28,6 +28,9 @@ docker network create "$network" >/dev/null
 docker run -d --name "$nextcloud" --network "$network" -v "$workspace:/var/www/html/custom_apps/saml_provider:ro" "${NEXTCLOUD_IMAGE:-nextcloud:34-apache}" >/dev/null
 wait_http http://e2e-nextcloud/status.php "$nextcloud"
 docker exec --user www-data "$nextcloud" php occ maintenance:install --database sqlite --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data >/dev/null
+# Disable Nextcloud's first-run wizard in this ephemeral test instance before any browser login.
+# This keeps the E2E flow and documentation capture focused on the populated SAML settings.
+docker exec --user www-data "$nextcloud" php occ app:disable firstrunwizard >/dev/null
 # The requests below originate from the Docker network hostname. Add it only to this
 # ephemeral test installation; otherwise Nextcloud correctly rejects it with HTTP 400.
 docker exec --user www-data "$nextcloud" php occ config:system:set overwrite.cli.url --value=http://e2e-nextcloud >/dev/null

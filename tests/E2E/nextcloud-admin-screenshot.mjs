@@ -28,42 +28,38 @@ try {
   await page.getByText('Your Nextcloud as identity provider', { exact: true }).waitFor({ state: 'visible' });
   await page.getByText('Kimai E2E', { exact: true }).waitFor({ state: 'visible' });
 
-  // Nextcloud can show a first-run/welcome dialog over an otherwise rendered
-  // settings page. Dismiss it through its visible controls first, just as a user
-  // would. This must happen before assessing whether the app is unobscured.
-  for (const name of [/^(skip|close|not now|got it|continue)$/i, /^(next|done)$/i]) {
-    const button = page.getByRole('button', { name }).first();
-    if (await button.isVisible().catch(() => false)) await button.click().catch(() => {});
-  }
-  await page.keyboard.press('Escape').catch(() => {});
-
-  // Some Nextcloud releases retain a startup container after its UI has already
-  // rendered. It is not part of the SAML Provider UI and can cover the page in a
-  // headless screenshot indefinitely. Remove only a large fixed overlay whose own
-  // id/class explicitly identifies it as loading, first-run, welcome, or wizard.
-  // Never remove the app root or an arbitrary dialog.
+  // The ephemeral instance disables Nextcloud's firstrunwizard through OCC
+  // during provisioning. Require an unobscured, rendered SAML settings page;
+  // do not alter the DOM or dismiss overlays in the browser.
   await page.waitForFunction(() => {
     const root = document.getElementById('saml-provider-admin-settings');
-    if (!root) return false;
-    const viewportArea = window.innerWidth * window.innerHeight;
-    for (const element of Array.from(document.querySelectorAll('body *'))) {
-      if (element === root || element.contains(root) || root.contains(element)) continue;
-      const marker = `${element.id} ${element.className}`.toLowerCase();
-      if (!/(initial|loading|loader|firstrun|first-run|welcome|wizard)/.test(marker)) continue;
-      const style = window.getComputedStyle(element);
-      const box = element.getBoundingClientRect();
-      const fixed = style.position === 'fixed' || style.position === 'absolute';
-      const visible = style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0;
-      if (fixed && visible && box.width * box.height > viewportArea * 0.25) element.remove();
-    }
     const centre = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-    return Boolean(centre && root.contains(centre));
+    return Boolean(root && centre && root.contains(centre));
   }, { timeout: 25_000 });
-  await page.waitForTimeout(250);
+
+  // Nextcloud keeps settings in an application-level scrolling container. Playwright's
+  // fullPage option captures document scrolling, not this nested container, so expand
+  // it to its real content height solely for the documentation capture. The page's
+  // data and visible controls remain unchanged.
+  const captureHeight = await page.evaluate(() => {
+    const candidates = [
+      document.querySelector('#app-content'),
+      document.querySelector('#app-content-wrapper'),
+      document.querySelector('#content'),
+    ].filter(Boolean);
+    const scrollContainer = candidates.find((element) => element.scrollHeight > element.clientHeight + 1);
+    if (!scrollContainer) return 0;
+    const height = scrollContainer.scrollHeight;
+    scrollContainer.style.height = `${height}px`;
+    scrollContainer.style.maxHeight = 'none';
+    scrollContainer.style.overflow = 'visible';
+    return height;
+  });
   await page.screenshot({ path: screenshot, fullPage: true });
   await writeFile(`${artifactDirectory}/nextcloud-saml-provider-admin-e2e.json`, JSON.stringify({
     url: page.url(),
-    assertions: ['IdP settings visible', 'Kimai E2E service provider visible', 'First-run and loading overlays dismissed before capture'],
+    captureHeight,
+    assertions: ['IdP settings visible', 'Kimai E2E service provider visible', 'First-run wizard disabled in test installation', 'Nested settings container expanded for full-page capture'],
   }, null, 2));
   if (documentationScreenshot) await copyFile(screenshot, documentationScreenshot);
   console.log(`Captured populated Nextcloud SAML Provider admin settings at ${page.url()}`);

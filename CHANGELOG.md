@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.37
+
+- Capture the complete Nextcloud SAML Provider admin settings content in E2E documentation screenshots by expanding Nextcloud's nested settings scroll container to its actual content height before the Playwright full-page capture.
+
+## 0.7.36
+
+- Disable Nextcloud's `firstrunwizard` app via OCC immediately after provisioning every ephemeral Kimai SAML E2E test instance, preventing welcome dialogs from obscuring the documentation screenshot.
+- Simplify screenshot capture: it now verifies the real visible SAML Provider admin interface without browser-side dialog handling or DOM manipulation.
+
 ## 0.7.35
 
 - Make the populated admin-page capture handle Nextcloud first-run and startup overlays: dismiss visible user controls, send Escape, and remove only large fixed overlays explicitly marked as loading/first-run/welcome/wizard before verifying the visible app page.
@@ -379,15 +388,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.7.36] - 2026-08-27
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

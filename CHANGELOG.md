@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.6.7
+
+- Make the Kimai E2E flow independent of a particular Nextcloud login-template request-token field: send the token when present, then validate the actual login submission result.
+- Add actionable diagnostics for a failed Nextcloud login submission, including page and submission response headers plus capped response excerpts.
+
+## 0.6.6
+
+- Make the Kimai E2E login-token extraction robust to either HTML attribute order and print a capped login response diagnostic when the token is absent.
+- Preserve E2E containers on test failure until the GitHub Actions diagnostics step has collected their logs; keep automatic cleanup after successful runs.
+
+## 0.6.5
+
+- Clarify the README test architecture: local unit-test doubles are behavioral fixtures only; the dynamically discovered real Nextcloud matrix is the API-compatibility authority, and the Kimai stage is a full SSO test rather than wiring-only validation.
+
 ## 0.6.4
 
 - Fix full Kimai SSO test workspace writes: run the temporary HTTP client with the GitHub runner's numeric UID/GID so its shared cookie jar, headers, and response files are writable on the bind-mounted E2E directory.

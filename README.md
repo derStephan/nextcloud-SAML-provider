@@ -210,7 +210,7 @@ For Kimai-specific configuration and behavior, see the official [Kimai SAML docu
 
 ## Quality assurance and release process
 
-This project uses a layered test approach. The layers answer different questions: unit tests validate application behavior in isolation, Nextcloud integration tests validate installation and framework integration, and the Kimai test validates the SAML wiring with a real external Service Provider. A later stage is never started after a failed earlier stage.
+This project uses a layered test approach. Unit tests validate application behavior in isolation; local test doubles are intentionally only behavioral fixtures, not the authority for Nextcloud API compatibility. The dynamically discovered real Nextcloud integration matrix validates installation, framework contracts, and API compatibility. The Kimai test validates a complete SAML SSO exchange with a real external Service Provider. A later stage is never started after a failed earlier stage.
 
 ### Coverage policy
 
@@ -225,7 +225,7 @@ GitHub Actions runs the following dependency chain:
 ```text
 Unit tests
     -> Nextcloud integration tests
-        -> Kimai SAML end-to-end wiring test
+        -> Kimai SAML end-to-end test
             -> Release app (main only)
 ```
 
@@ -236,7 +236,7 @@ Each downstream workflow is triggered through `workflow_run` only when its direc
 - a failed Kimai run blocks release; and
 - a release run first confirms that the tested commit is still the current `main` commit, avoiding a release of a superseded revision.
 
-Unit tests run on the currently supported PHP versions discovered from the lifecycle API. They install the Composer dependencies, run PHPUnit, generate Clover coverage, enforce the 80% full-`lib/` gate, and upload the report to Codecov. A Codecov upload issue does not turn a successful test suite into a failed build.
+Unit tests run on the currently supported PHP versions discovered from the lifecycle API. They install the Composer dependencies, run PHPUnit, generate Clover coverage, enforce the 80% full-`lib/` gate, and upload the report to Codecov. A Codecov upload issue does not turn a successful test suite into a failed build. Framework compatibility is deliberately not inferred from unit-test doubles; it is enforced by the real-container API contract stage described below.
 
 ### Nextcloud integration tests
 
@@ -270,7 +270,7 @@ The test installs and enables the app in an ephemeral Nextcloud instance, checks
 
 This is a full protocol-level HTTP test: it validates redirects, cookies, the real Nextcloud login form, AuthnRequest parsing, SP lookup, signed SAML POST binding, Kimai ACS validation, and SAML-user import. It deliberately does not assert visual rendering or JavaScript behavior, which are separate UI concerns.
 
-All containers, the temporary network, test certificates, database, browser-session files, and configuration are discarded after the run. The temporary HTTP client runs with the CI runner's numeric UID/GID solely to write its cookie jar and response captures into the bind-mounted ephemeral test directory. The workflow receives no release credentials, signing keys, or App Store token. On failure it prints container diagnostics before cleanup.
+After a successful run, all containers, the temporary network, test certificates, database, browser-session files, and configuration are discarded. On failure, the test deliberately leaves its temporary containers alive long enough for the GitHub Actions diagnostic step to collect container logs; that workflow step then removes them. The temporary HTTP client runs with the CI runner's numeric UID/GID solely to write its cookie jar and response captures into the bind-mounted ephemeral test directory. The workflow receives no release credentials, signing keys, or App Store token.
 
 ### Releases and App Store publication
 

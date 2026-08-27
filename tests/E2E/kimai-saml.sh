@@ -3,7 +3,13 @@
 set -euo pipefail
 network=saml-e2e; nextcloud=e2e-nextcloud; kimai=e2e-kimai; mariadb=e2e-mariadb
 workspace="${GITHUB_WORKSPACE:-$PWD}"
-cleanup(){ docker rm --force "$nextcloud" "$kimai" "$mariadb" 2>/dev/null || true; docker network rm "$network" 2>/dev/null || true; }
+completed=false
+cleanup(){
+  if [[ "$completed" == true ]]; then
+    docker rm --force "$nextcloud" "$kimai" "$mariadb" 2>/dev/null || true
+    docker network rm "$network" 2>/dev/null || true
+  fi
+}
 trap cleanup EXIT
 fail(){ echo "E2E failure: $*" >&2; exit 1; }
 wait_http(){
@@ -90,10 +96,35 @@ sso_url="$(absolute_url "$sso_url" http://e2e-kimai:8001)"; [[ "$sso_url" == htt
 http --silent --show-error --dump-header /work/sso.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$sso_url"
 login_url="$(location "$e2e_dir/sso.headers")"; [[ -n "$login_url" ]] || fail 'Nextcloud SSO did not redirect anonymous client to login'
 login_url="$(absolute_url "$login_url" http://e2e-nextcloud)"
-http --silent --show-error --output /work/login.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$login_url"
-requesttoken="$(sed -n 's/.*name="requesttoken" value="\([^" ]*\)".*/\1/p' "$e2e_dir/login.html" | head -n 1)"; [[ -n "$requesttoken" ]] || fail 'Nextcloud login form did not provide requesttoken'
-http --silent --show-error --dump-header /work/login-submit.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken" "$login_url"
-return_url="$(location "$e2e_dir/login-submit.headers")"; [[ -n "$return_url" ]] || fail 'Nextcloud login did not return to pending SSO request'
+http --silent --show-error --dump-header /work/login.headers --output /work/login.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$login_url"
+# Login controllers can render requesttoken as a hidden field, but the normal login
+# endpoint also accepts the credential form without tying this protocol test to a
+# particular template/theme. Send the token when present; do not fail merely because a
+# Nextcloud version changes the login HTML.
+login_flat="$(tr '\n' ' ' < "$e2e_dir/login.html")"
+requesttoken="$(printf '%s' "$login_flat" | sed -n 's/.*name=["'"'"']requesttoken["'"'"'][^>]*value=["'"'"']\([^"'"'"' ]*\)["'"'"'].*/\1/p' | head -n 1)"
+if [[ -z "$requesttoken" ]]; then
+  requesttoken="$(printf '%s' "$login_flat" | sed -n 's/.*value=["'"'"']\([^"'"'"' ]*\)["'"'"'][^>]*name=["'"'"']requesttoken["'"'"'].*/\1/p' | head -n 1)"
+fi
+login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password')
+if [[ -n "$requesttoken" ]]; then
+  login_args+=(--data-urlencode "requesttoken=$requesttoken")
+fi
+http "${login_args[@]}" "$login_url"
+return_url="$(location "$e2e_dir/login-submit.headers")"
+if [[ -z "$return_url" ]]; then
+  echo "--- Nextcloud login page headers ---" >&2
+  cat "$e2e_dir/login.headers" >&2 || true
+  echo "--- Nextcloud login page excerpt ---" >&2
+  head -c 2048 "$e2e_dir/login.html" >&2 || true
+  echo >&2
+  echo "--- Nextcloud login submit headers ---" >&2
+  cat "$e2e_dir/login-submit.headers" >&2 || true
+  echo "--- Nextcloud login submit excerpt ---" >&2
+  head -c 4096 "$e2e_dir/login-submit.html" >&2 || true
+  echo >&2
+  fail 'Nextcloud login did not return to pending SSO request'
+fi
 return_url="$(absolute_url "$return_url" http://e2e-nextcloud)"
 http --silent --show-error --output /work/saml-response.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$return_url"
 acs_url="$(sed -n 's/.*<form[^>]*action="\([^" ]*\)".*/\1/p' "$e2e_dir/saml-response.html" | head -n 1)"
@@ -104,5 +135,6 @@ http --silent --show-error --dump-header /work/acs.headers --output /work/acs.ht
 acs_status="$(awk 'NR == 1 {print $2}' "$e2e_dir/acs.headers" | tr -d '\r')"; [[ "$acs_status" =~ ^30[12378]$ ]] || fail "Kimai rejected signed SAML response (HTTP ${acs_status:-none})"
 user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
 [[ "$user_count" == '1' ]] || fail "Kimai did not import SAML user (count: ${user_count:-none})"
-rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login-submit,acs}.headers "$e2e_dir"/{login,saml-response,acs}.html
+rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login,login-submit,acs}.headers "$e2e_dir"/{login,login-submit,saml-response,acs}.html
+completed=true
 echo 'Kimai SAML full browser-style SSO test passed.'

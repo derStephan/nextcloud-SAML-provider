@@ -389,6 +389,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.7.38] - 2026-08-27
+
+### Changed
+
+- Automated release after successful quality checks.
+- Tested stable Nextcloud compatibility range: 33 through 34.
+- Release trigger: workflow_run.
+
+
 ### Added
 
 - Documentation and repository files required for public App Store submission.

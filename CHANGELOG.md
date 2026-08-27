@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.11
+
+- Align the runtime-installed Playwright Node SDK with the Playwright 1.62.1 Docker image, fixing the Chromium executable-version mismatch caused by the previously retained 1.54.0 package.
+- Upgrade the temporary test-container npm CLI to 12.0.2 and assert its installed version before resolving the Playwright 1.62.1 SDK.
+- Log the matched SDK/browser version immediately after the actual browser-test start marker.
+
 ## 0.7.10
 
 - Fix the Nextcloud login return target to be an origin-safe relative SSO route, preventing the invalid `/http://e2e-nextcloud/...` return path.

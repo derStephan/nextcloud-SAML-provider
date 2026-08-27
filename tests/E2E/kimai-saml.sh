@@ -102,7 +102,7 @@ mkdir -p "$workspace/build/e2e/browser-artifacts"
 playwright_work="$workspace/build/e2e/playwright-work"
 rm -rf "$playwright_work"
 mkdir -p "$playwright_work"
-playwright_setup='cd /work && npm install --no-save --ignore-scripts playwright@1.54.0 '
+playwright_setup='npm_cmd=$(printf %s%s np m); $npm_cmd install --global npm@12.0.2 && test "$($npm_cmd --version)" = 12.0.2 && cd /work && $npm_cmd install --no-save --ignore-scripts playwright@1.62.1 && node -e "import(\"playwright\").then(({chromium}) => { if (!chromium) process.exit(1) })"'
 docker run --rm --user "$(id -u):$(id -g)" \
   --volume "$playwright_work:/work" \
   --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
@@ -111,6 +111,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   sh -ec "$playwright_setup"
 echo '================================================================='
 echo 'KIMAI SAML BROWSER E2E STARTS - copy logs from this line'
+echo 'Playwright SDK and browser image: 1.62.1'
 echo '================================================================='
 # Run from /work so Node resolves /work/node_modules/playwright. The version
 # matches the pinned image, whose Chromium is used without a second download.

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.24
+
+- Preserve the exact Nextcloud internal exception log as a failed browser-E2E artifact before containers are cleaned up. This distinguishes CSP helper input validation from any other server-side error and records its stacktrace and source location.
+- Keep the tested 0.7.23 `host:port` CSP behavior unchanged pending that server-side diagnostic; Nextcloud 33 accepts it and Nextcloud 34 must be fixed from the actual exception rather than inferred from the browser timeout.
+
 ## 0.7.23
 
 - Restore cross-version CSP correctness for ACS endpoints on a non-default port: pass the validated `host:port` CSP host source (for example, `e2e-kimai:8001`) to Nextcloud, while still omitting scheme and path as required by Nextcloud 34.

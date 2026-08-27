@@ -66,6 +66,11 @@ jobs:
           for container in e2e-nextcloud e2e-kimai e2e-mariadb; do
             docker logs "$container" 2>&1 | tee "build/e2e/browser-artifacts/${container}.log" || true
           done
+          # Apache access logs do not include Nextcloud's exception stacktrace. Copy
+          # the server log before cleanup so a response-rendering failure can be
+          # diagnosed from its exact exception and source location.
+          docker cp e2e-nextcloud:/var/www/html/data/nextcloud.log build/e2e/browser-artifacts/nextcloud-internal.log 2>/dev/null || true
+          docker exec --user www-data e2e-nextcloud php occ log:watch --help > build/e2e/browser-artifacts/nextcloud-log-command-help.txt 2>&1 || true
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v5

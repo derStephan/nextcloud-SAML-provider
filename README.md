@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -240,27 +240,26 @@ Unit tests run on the currently supported PHP versions discovered from the lifec
 
 ### Nextcloud integration tests
 
-After the unit-test workflow succeeds, the integration workflow discovers supported stable Nextcloud major releases (33 and later) and, when an explicit current Docker RC or beta Apache image exists, adds that pre-release image to the matrix. Each matrix job:
+After the unit-test workflow succeeds, the integration workflow discovers supported stable Nextcloud major releases (33 and later) and, when an explicit current Docker RC or beta Apache image exists, adds that pre-release image to the matrix. Each matrix job first runs the **Public API Preflight**: it rejects private Nextcloud implementation references such as `OC::$server`, `OC::`, `lib/private`, and the legacy CSP nonce locator in both production and test code. The failure output names the file, line, and expected replacement direction; no browser test is started after such a finding.
 
-1. starts the selected official Nextcloud Apache Docker image;
-2. mounts this app read-only as `custom_apps/saml_provider`;
-3. installs an ephemeral SQLite-backed Nextcloud instance;
-4. enables the app and verifies that Nextcloud reports it as enabled;
-5. verifies the expected initial endpoint behavior: metadata is unavailable until IdP material exists (`404`) and SSO without an AuthnRequest is rejected (`400`).
-
-Container and application logs are printed if a smoke test fails, and the container is removed in all cases.
-
-Before endpoint checks, each matrix container also runs `tests/Integration/nextcloud-api-contract.php` **inside the selected Nextcloud image**. It verifies the exact public OCP interfaces, methods, constants, base classes, response classes, migration types, and attributes used by production code. Because the version matrix is discovered dynamically, this check covers every current supported stable release and any available RC/beta image — not merely Nextcloud 33 or the local unit-test doubles. A removed or renamed framework API therefore blocks the integration stage before Kimai or release.
+The job then starts the selected official Nextcloud Apache image, mounts the app read-only, installs an ephemeral SQLite-backed instance, enables the app, and runs `tests/Integration/nextcloud-api-contract.php` **inside that exact image**. The contract verifies every public `OCP` type, method, constant, base class, response class, migration type, and attribute used by production code. A missing public contract is reported as an upstream compatibility finding, before endpoint checks or Kimai start. Finally, the smoke test verifies that metadata is unavailable without IdP material (`404`) and that SSO without an AuthnRequest is rejected (`400`). Container and application logs are shown on failure.
 
 ### Kimai SAML browser end-to-end test
 
-After every Nextcloud integration matrix job succeeds, the `Kimai SAML end-to-end test` independently discovers **the same supported stable and explicit RC/beta Nextcloud image matrix**. For each entry it starts a private Docker network containing the selected Nextcloud IdP, `mariadb:11.4`, Kimai, and headless Chromium.
+After every Nextcloud integration matrix job succeeds, the Kimai workflow independently tests the same stable and available RC/beta Nextcloud image matrix. For each matrix entry it creates a private Docker network with the selected Nextcloud IdP, `mariadb:11.4`, Kimai, and headless Chromium.
 
-Each matrix job installs and enables the app in a fresh Nextcloud instance, verifies the migration table, creates ephemeral IdP signing material, registers Kimai as a Service Provider, and verifies both parties' metadata and Kimai's ACS endpoint. Chromium then opens Kimai's SAML login, follows the AuthnRequest redirect to Nextcloud, submits visible username and password credential controls, follows Nextcloud's normal redirect and generated SAML POST back to Kimai, and requires Kimai to create exactly one SAML-authenticated user for the test email.
+The job runs these layers in order:
 
-The test does **not** scrape or replay Nextcloud HTML, hidden request tokens, generated form actions, or SAML form values. The browser owns cookies, CSRF behavior, redirects, JavaScript, and the auto-submitted SAML response, as it does for a real user. Its locators deliberately target user-facing credential controls rather than Nextcloud template classes or markup details.
+1. **Public API Preflight** — the same private-API guard runs before containers are provisioned.
+2. **Nextcloud public API contract** — runs inside the selected Nextcloud image before SAML configuration.
+3. **Kimai public SAML HTTP preflight** — Kimai must expose valid SAML metadata containing its expected ACS URL, and its public SAML login endpoint must redirect to the configured Nextcloud IdP.
+4. **Negative browser SSO** — wrong Nextcloud credentials must remain on the IdP login page and must not reach Kimai's ACS.
+5. **Positive browser SSO** — a real browser starts at Kimai, authenticates at Nextcloud, returns via the signed SAML POST, and must reach an authenticated Kimai page after an accepted ACS redirect.
+6. **Populated admin-page capture** — a fresh authenticated browser opens the public Nextcloud admin settings route and requires both IdP settings and the registered `Kimai E2E` Service Provider to be visible. It writes `docs/admin-settings-e2e-nc<target>.png` (for example, `docs/admin-settings-e2e-nc34.png`) from this populated page and adds it to the diagnostic artifact.
 
-Failures preserve a Chromium screenshot for the affected matrix entry and print container logs. The workflow has no release credentials, signing keys, or App Store token. Because it is downstream of the Nextcloud integration matrix and runs per selected image, a failed version blocks release while successful versions cannot mask a failure in another matrix entry.
+The E2E tests do not parse or replay Nextcloud HTML, CSRF tokens, generated form actions, SAML values, internal Nextcloud APIs, or Kimai database tables. They use normal browser controls and public HTTP endpoints, then assert user-visible outcomes. Failed runs preserve screenshots, browser traces, HTTP metadata, and container logs. Successful runs upload each populated admin screenshot as a versioned E2E artifact. When the protected release workflow runs, it downloads only screenshots from the exact successful E2E run that triggered it, validates the PNG files and expected matrix count, and commits them before signing, tagging, and publishing the release. The released documentation therefore contains screenshots from the same test evidence as that release.
+
+Diagnostics are named with the app version, Nextcloud matrix target, GitHub run ID, and retry attempt, for example `kimai-saml-browser-v0.7.26-nc34-run123456789-attempt1.zip`.
 
 ### Releases and App Store publication
 
@@ -340,8 +339,8 @@ XDEBUG_MODE=coverage composer test:coverage
 
 The coverage command writes `build/coverage/clover.xml` and fails when line coverage is below **80%**.
 
-The GitHub Actions workflow discovers the PHP versions that are currently supported upstream at the beginning of every run, then tests each of them. It includes releases that still receive security fixes and updates automatically when PHP support status changes. The workflow also runs weekly to detect a newly supported release without requiring a code change. Lifecycle data is obtained from the [endoflife.date PHP API](https://endoflife.date/php), which tracks the upstream PHP support schedule.
+GitHub Actions discovers currently supported PHP versions from the [endoflife.date PHP API](https://endoflife.date/php), tests each one, and runs weekly as well as on push, pull request, and manual dispatch. Before PHPUnit, it executes the Public API Preflight described above.
 
-A separate integration workflow discovers currently supported **Nextcloud 33 or later** major releases from the [Nextcloud lifecycle API](https://endoflife.date/nextcloud). For every supported major version, it starts the matching official Nextcloud Docker image, installs a fresh SQLite-backed instance, enables this app, and verifies that the metadata and SSO routes are registered. It also discovers the newest explicitly versioned Nextcloud RC or beta Apache image from Docker Hub and tests it when one is available. The workflow deliberately does not use Docker Hub's generic `beta` tag because that tag may point to an unrelated historical image. It runs on every push, pull request, weekly schedule, and manual dispatch.
+The downstream Nextcloud workflow discovers supported **Nextcloud 33 or later** majors from the [Nextcloud lifecycle API](https://endoflife.date/nextcloud), plus the newest explicitly versioned Apache RC/beta image when available. It deliberately never uses Docker Hub's generic `beta` tag. The downstream Kimai workflow repeats that version matrix as a real browser SAML interoperability test.
 
-The test bootstrap intentionally loads `tests/Support/TestDoubles.php`, which contains lightweight test-only implementations of the Nextcloud interfaces needed for isolated unit tests. This allows the suite to run without a complete Nextcloud server installation.
+The unit-test bootstrap loads lightweight behavioral fixtures for public `OCP` interfaces only. Those fixtures are not used as a compatibility authority: the public API contract is executed inside every selected real Nextcloud image.

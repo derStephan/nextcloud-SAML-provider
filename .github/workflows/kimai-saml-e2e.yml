@@ -68,6 +68,14 @@ jobs:
           MARIADB_IMAGE: mariadb:11.4
           PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.62.1-noble
         run: bash tests/E2E/kimai-saml.sh
+      - name: Upload current admin screenshot
+        if: success()
+        uses: actions/upload-artifact@v5
+        with:
+          name: kimai-saml-admin-screenshot-v${{ steps.app-version.outputs.version }}-nc${{ matrix.target.label }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
+          path: docs/admin-settings-e2e-nc${{ matrix.target.label }}.png
+          if-no-files-found: error
+          retention-days: 30
       - name: Collect container diagnostics
         if: failure()
         run: |
@@ -86,7 +94,9 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: kimai-saml-browser-v${{ steps.app-version.outputs.version }}-nc${{ matrix.target.label }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
-          path: build/e2e/browser-artifacts
+          path: |
+            build/e2e/browser-artifacts
+            docs/admin-settings-e2e-nc*.png
           if-no-files-found: error
           retention-days: 7
       - name: Remove containers

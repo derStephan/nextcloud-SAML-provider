@@ -1,31 +1,48 @@
-# Nextcloud App Store release checklist
+# Release guide: SAML Provider for Nextcloud
 
-## One-time preparation
+This guide applies only to the `saml_provider` app in this repository. Its App Store metadata is maintained in `appinfo/info.xml`; its release pipeline is defined in `.github/workflows/release.yml`.
 
-1. Create the application entry at [apps.nextcloud.com](https://apps.nextcloud.com/).
-2. Confirm that the app ID is permanently `saml_provider`.
-3. Request a Nextcloud App Store code-signing certificate for the maintainer account.
-4. Store the certificate and private key securely. Never commit either one to GitHub.
-5. Configure GitHub repository topics, description, issue tracker, and private vulnerability reporting.
+## What the automated pipeline has already proved
 
-The App Store title, summary, long description, repository URL, issue tracker URL, license, compatibility range, contributor (`derStephan`), and primary category (`integration`) are read from `appinfo/info.xml` in the source release. Security is described in the listing text and feature set. The long App Store description is the `<description lang="en">` element in that file.
+A release is considered only after the fail-closed CI chain has passed for the exact commit:
 
-## Per-release steps
+```text
+Unit tests -> Nextcloud integration matrix -> Kimai SAML browser E2E -> Release app
+```
 
-Normal releases are automated by the **Release app** GitHub workflow. The steps below are useful for the initial release or manual recovery only.
+The Nextcloud matrix covers supported Nextcloud majors from 33 onward and an explicitly versioned RC/beta image when one is available. Before functional checks, it rejects private Nextcloud APIs and validates the public `OCP` contract inside every selected image. The Kimai E2E stage validates public SAML metadata and the real negative and positive browser SSO paths.
 
-1. Update `appinfo/info.xml` with the release version and compatibility range.
-2. Update `CHANGELOG.md`.
-3. Run unit tests and the coverage gate:
+Do not bypass a failed stage by manually creating an App Store archive. Fix the compatibility or functional finding first and run the pipeline again.
 
-   ```bash
-   composer install
-   XDEBUG_MODE=coverage composer test:coverage
-   ```
+## One-time App Store preparation
 
-4. Confirm GitHub Actions is green, including Nextcloud integration tests.
-5. Build a clean archive containing exactly one top-level `saml_provider/` directory.
-6. In a matching supported Nextcloud test installation, sign the final app directory with the App Store certificate:
+1. Create the app entry at [apps.nextcloud.com](https://apps.nextcloud.com/) with the permanent app ID `saml_provider`.
+2. Request an App Store code-signing certificate for the maintainer account.
+3. Store the signing certificate and private key only in the protected release environment. Never commit them, add them to CI logs, or include them in an artifact.
+4. Configure the repository description, issue tracker, topics, and private vulnerability reporting.
+5. Review the listing metadata in `appinfo/info.xml`: title, summary, English long description, MIT license, repository URL, issue tracker, author, category, and supported Nextcloud range.
+
+## Automated release procedure
+
+The **Release app** workflow runs only for a successful `main` commit that still matches the tested commit. It:
+
+1. determines the tested supported Nextcloud range;
+2. updates release metadata when a release is needed;
+3. creates the release commit and annotated tag;
+4. signs the final app directory using the protected App Store key;
+5. verifies the generated `appinfo/signature.json`;
+6. creates a signed `saml_provider.tar.gz` archive and attaches it to a GitHub Release.
+
+App Store publication is opt-in: it occurs only when the repository variable `PUBLISH_TO_APPSTORE` is exactly `true`. Without that value, the signed GitHub Release is created but nothing is submitted to the App Store.
+
+## Manual recovery only
+
+Use this route only when the automated release workflow cannot be used. Begin from the exact green commit and run the complete CI chain first.
+
+1. Confirm `appinfo/info.xml` has the intended version and tested Nextcloud compatibility range.
+2. Confirm `CHANGELOG.md` documents the release.
+3. Build a clean archive containing exactly one top-level `saml_provider/` directory.
+4. On a supported Nextcloud installation, sign the final app directory:
 
    ```bash
    sudo -u www-data php occ integrity:sign-app \
@@ -34,12 +51,12 @@ Normal releases are automated by the **Release app** GitHub workflow. The steps 
      --path=/path/to/saml_provider
    ```
 
-   This creates `appinfo/signature.json`.
+5. Verify that `appinfo/signature.json` was created.
+6. Do not change any application or documentation file after signing. If anything changes, sign again.
+7. Archive the signed directory, attach that exact archive to the GitHub Release, and submit the same file to the App Store only after the normal release review.
 
-7. Do not modify any app file after signing. Archive the signed `saml_provider/` directory.
-8. Upload the signed archive to a GitHub Release and submit that exact archive in the Nextcloud App Store.
-9. Install the archive on a clean supported Nextcloud instance and verify it before publishing.
+## Screenshot evidence
 
-## Important
+Successful Kimai browser E2E jobs generate populated admin-page screenshots named `docs/admin-settings-e2e-nc<target>.png`, for example `docs/admin-settings-e2e-nc34.png`. They show the current Nextcloud design, IdP settings, and the configured `Kimai E2E` Service Provider.
 
-`appinfo/signature.json` is release-specific. It is generated after the final build and should not be manually edited. Any code or documentation change after signing requires signing again.
+The protected release workflow downloads only the screenshot artifacts belonging to the exact successful E2E workflow run that triggered the release. It verifies that every successful matrix job produced one target-named, decodable PNG, copies them into `docs/`, and commits them with the release metadata before signing and tagging. Thus a release never intentionally carries an older screenshot. If screenshot evidence is missing or incomplete, the release fails rather than publishing stale documentation.

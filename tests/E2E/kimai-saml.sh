@@ -159,6 +159,23 @@ rm -rf "$playwright_work"
 # A successful post-ACS browser navigation is the public, user-visible Kimai contract.
 # Do not depend on Kimai's internal user-table names or persistence layout.
 echo 'Kimai accepted the signed SAML response and established a browser session.'
+
+echo 'Capturing populated Nextcloud SAML Provider admin settings for documentation'
+mkdir -p "$workspace/docs"
+screenshot_target="${E2E_TARGET_SLUG:-nextcloud}"
+screenshot_target="${screenshot_target//[^A-Za-z0-9._-]/-}"
+documentation_screenshot="/work/docs/admin-settings-e2e-nc${screenshot_target}.png"
+docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
+  --volume "$playwright_work:/work" \
+  --volume "$workspace/tests/E2E/nextcloud-admin-screenshot.mjs:/work/nextcloud-admin-screenshot.mjs:ro" \
+  --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
+  --volume "$workspace/docs:/work/docs" \
+  --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
+  --env E2E_DOCUMENTATION_SCREENSHOT="$documentation_screenshot" \
+  "$playwright_image" \
+  node /work/nextcloud-admin-screenshot.mjs
+[[ -s "$workspace/docs/admin-settings-e2e-nc${screenshot_target}.png" ]] || fail "Admin settings screenshot was not written to docs/admin-settings-e2e-nc${screenshot_target}.png"
+echo "Captured docs/admin-settings-e2e-nc${screenshot_target}.png from the populated E2E admin interface."
 echo 'Kimai SAML browser end-to-end test passed.'
 completed=true
 echo '=========================================================='

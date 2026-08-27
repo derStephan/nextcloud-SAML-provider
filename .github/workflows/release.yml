@@ -5,6 +5,7 @@ on:
     types: [completed]
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: app-release
   cancel-in-progress: false
@@ -52,6 +53,43 @@ jobs:
           set -euo pipefail
           current_range="$(sed -n 's/.*<nextcloud min-version="\([0-9]*\)"\( max-version="\([0-9]*\)"\)\{0,1\}\/.*/\1 \3/p' appinfo/info.xml)"
           if [[ "$EVENT" == "schedule" && "$current_range" == "$MIN_VERSION $MAX_VERSION" ]]; then echo "release=false" >> "$GITHUB_OUTPUT"; else echo "release=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Import tested admin screenshots
+        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          E2E_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          echo "Importing admin screenshots only from successful Kimai E2E run ${E2E_RUN_ID}."
+          artifact_urls="$(gh api --paginate "repos/${REPOSITORY}/actions/runs/${E2E_RUN_ID}/artifacts?per_page=100"             --jq '.artifacts[] | select(.expired == false) | select(.name | startswith("kimai-saml-admin-screenshot-")) | .archive_download_url')"
+          [[ -n "$artifact_urls" ]] || { echo "No current admin screenshot artifacts were produced by E2E run ${E2E_RUN_ID}. Refusing to release stale documentation." >&2; exit 1; }
+          temp="$(mktemp -d)"; trap 'rm -rf "$temp"' EXIT
+          count=0
+          while IFS= read -r artifact_url; do
+            archive="$temp/$count.zip"
+            gh api "$artifact_url" > "$archive"
+            unzip -q "$archive" -d "$temp/extract-$count"
+            count=$((count + 1))
+          done <<< "$artifact_urls"
+          mkdir -p docs
+          mapfile -t screenshots < <(find "$temp" -type f -regextype posix-extended -regex '.*/admin-settings-e2e-nc[A-Za-z0-9._-]+\.png' | sort)
+          [[ ${#screenshots[@]} -gt 0 ]] || { echo "E2E artifacts did not contain target-named admin screenshots. Refusing to release." >&2; exit 1; }
+          for screenshot in "${screenshots[@]}"; do
+            filename="$(basename "$screenshot")"
+            python3 - "$screenshot" <<'PYTHON'
+          from PIL import Image
+          import sys
+          with Image.open(sys.argv[1]) as image:
+              image.verify()
+          PYTHON
+            cp "$screenshot" "docs/$filename"
+            echo "Imported tested screenshot: docs/$filename"
+          done
+          expected="$(gh api --paginate "repos/${REPOSITORY}/actions/runs/${E2E_RUN_ID}/jobs?per_page=100" --jq '[.jobs[] | select(.name | startswith("Nextcloud ")) | select(.conclusion == "success")] | length')"
+          [[ "$expected" =~ ^[1-9][0-9]*$ ]] || { echo "Could not determine successful E2E matrix jobs." >&2; exit 1; }
+          [[ ${#screenshots[@]} -eq $expected ]] || { echo "Expected ${expected} E2E screenshots, imported ${#screenshots[@]}. Refusing incomplete documentation release." >&2; exit 1; }
+          echo "Imported ${#screenshots[@]} validated screenshots from E2E run ${E2E_RUN_ID}."
       - uses: shivammathur/setup-php@v2
         if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         with:
@@ -70,7 +108,7 @@ jobs:
           php scripts/prepare-release.php "$MIN_VERSION" "$MAX_VERSION" "$RELEASE_REASON"
           version="$(cat release-version.txt)"; echo "number=$version" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add appinfo/info.xml CHANGELOG.md README.md; git commit -m "Release v${version}"; git tag -a "v${version}" -m "Release v${version}"; git push origin HEAD:main --follow-tags
+          git add appinfo/info.xml CHANGELOG.md README.md docs/admin-settings-e2e-nc*.png; git commit -m "Release v${version}"; git tag -a "v${version}" -m "Release v${version}"; git push origin HEAD:main --follow-tags
       - name: Create signed archive
         if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         env:

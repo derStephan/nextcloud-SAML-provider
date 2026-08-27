@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.29
+
+- Upload one populated admin-settings screenshot artifact for every successful Nextcloud/Kimai E2E matrix job.
+- Have the protected release workflow download and validate only screenshots from its exact triggering E2E workflow run, require complete matrix coverage, and commit them to `docs/` before versioning, signing, tagging, and publishing. Releases therefore carry current tested screenshots rather than a prior run's images.
+
+## 0.7.28
+
+- Name generated populated admin-page screenshots by their tested Nextcloud matrix target, for example `docs/admin-settings-e2e-nc34.png`, so parallel version runs never overwrite each other.
+- Rewrite the App Store release guide for this SAML Provider's actual fail-closed CI, protected release workflow, opt-in App Store publication, and E2E screenshot review process.
+
+## 0.7.27
+
+- Capture the populated Nextcloud SAML Provider admin settings page in every successful Kimai browser E2E run. The capture verifies visible IdP settings and the registered Kimai Service Provider, writes `docs/admin-settings-e2e.png` in the test workspace, and includes it in the versioned diagnostics artifact.
+- Update the README to document the public API preflight, per-version OCP contract, public Kimai HTTP preflight, negative and positive browser flows, artifact naming, and the review-safe screenshot publication model.
+
 ## 0.7.26
 
 - Add a mandatory public-API preflight that scans application and test code for private Nextcloud APIs before any functional test runs. It reports the exact source location and replacement direction instead of allowing an opaque browser timeout.
@@ -338,15 +353,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.7.27] - 2026-08-27
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

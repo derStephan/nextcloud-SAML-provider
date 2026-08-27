@@ -85,17 +85,31 @@ status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent -
 playwright_image="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.54.0-noble}"
 docker pull "$playwright_image"
 mkdir -p "$workspace/build/e2e/browser-artifacts"
+# The browser image supplies browsers and OS dependencies, but no importable
+# project module. Prepare the matching Node package in a temporary work directory.
+playwright_work="$workspace/build/e2e/playwright-work"
+rm -rf "$playwright_work"
+mkdir -p "$playwright_work"
+playwright_setup='cd /work && npm install --no-save --ignore-scripts playwright@1.54.0 '
+docker run --rm --user "$(id -u):$(id -g)" \
+  --volume "$playwright_work:/work" \
+  --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+  --env npm_config_cache=/tmp/npm-cache \
+  "$playwright_image" \
+  sh -ec "$playwright_setup"
 echo '================================================================='
 echo 'KIMAI SAML BROWSER E2E STARTS - copy logs from this line'
 echo '================================================================='
-# The official image provides its Node dependencies at /ms-playwright/node_modules.
-# Mounting the ES module below that directory gives its resolver the expected parent.
+# Run from /work so Node resolves /work/node_modules/playwright. The version
+# matches the pinned image, whose Chromium is used without a second download.
 docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
-  --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/ms-playwright/kimai-saml-browser.mjs:ro" \
+  --volume "$playwright_work:/work" \
+  --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/work/kimai-saml-browser.mjs:ro" \
   --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
   --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
   "$playwright_image" \
-  node /ms-playwright/kimai-saml-browser.mjs
+  node /work/kimai-saml-browser.mjs
+rm -rf "$playwright_work"
 user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
 [[ "$user_count" == '1' ]] || fail "Kimai did not import the browser-authenticated SAML user (count: ${user_count:-none})"
 echo 'Kimai SAML browser end-to-end test passed.'

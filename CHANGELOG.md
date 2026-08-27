@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.7
+
+- Install the exact pinned Playwright Node package in a temporary browser work directory with browser download disabled; the official Playwright Docker image supplies the matching browser binaries and operating-system dependencies.
+- Start the browser trace only after the package preparation phase, then execute the test from that work directory so Node resolves the installed package reliably.
+
 ## 0.7.6
 
 - Load the Playwright container image before the browser-test trace marker, so the marker represents the actual start of the Chromium SSO flow.

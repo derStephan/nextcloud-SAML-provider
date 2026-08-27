@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.3
+
+- Make the Kimai E2E login submit to the action and username field discovered from the actual Nextcloud login form, rather than assuming the displayed login URL or a fixed field name.
+- Include the parsed credential-form details in failed-login diagnostics.
+
 ## 0.7.2
 
 - Add clear start and successful-end log markers around the actual Kimai SSO protocol trace.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract the SAML HTTP-POST form from a Nextcloud response."""
+"""Extract SAML POST and credential-form details from Nextcloud HTML."""
 from html.parser import HTMLParser
 from pathlib import Path
 import json
@@ -8,28 +8,44 @@ import sys
 class FormParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.in_form = False
-        self.result = {"action": "", "SAMLResponse": "", "RelayState": "", "requesttoken": ""}
+        self.current = None
+        self.forms = []
+        self.requesttoken = ""
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
-        if "data-requesttoken" in values and not self.result["requesttoken"]:
-            self.result["requesttoken"] = values["data-requesttoken"]
+        if "data-requesttoken" in values and not self.requesttoken:
+            self.requesttoken = values["data-requesttoken"]
         if tag.lower() == "form":
-            self.in_form = True
-            self.result["action"] = values.get("action", "")
-        elif tag.lower() == "input":
+            self.current = {"action": values.get("action", ""), "inputs": {}}
+        elif tag.lower() == "input" and self.current is not None:
             name = values.get("name", "")
-            if name == "requesttoken" and not self.result["requesttoken"]:
-                self.result["requesttoken"] = values.get("value", "")
-            # Only SAML POST fields belong to the extracted SAML form payload.
-            if self.in_form and name in ("SAMLResponse", "RelayState"):
-                self.result[name] = values.get("value", "")
+            if name:
+                self.current["inputs"][name] = {
+                    "value": values.get("value", ""),
+                    "type": values.get("type", "text").lower(),
+                }
+                if name == "requesttoken" and not self.requesttoken:
+                    self.requesttoken = values.get("value", "")
     def handle_endtag(self, tag):
-        if tag.lower() == "form":
-            self.in_form = False
+        if tag.lower() == "form" and self.current is not None:
+            self.forms.append(self.current)
+            self.current = None
 
 page = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
 parser = FormParser()
 parser.feed(page)
 parser.close()
-print(json.dumps(parser.result))
+result = {"action": "", "SAMLResponse": "", "RelayState": "", "requesttoken": parser.requesttoken, "loginAction": "", "loginUserField": ""}
+for form in parser.forms:
+    fields = form["inputs"]
+    if "SAMLResponse" in fields:
+        result["action"] = form["action"]
+        result["SAMLResponse"] = fields["SAMLResponse"]["value"]
+        result["RelayState"] = fields.get("RelayState", {}).get("value", "")
+    if any(field.get("type") == "password" for field in fields.values()):
+        result["loginAction"] = form["action"]
+        for candidate in ("user", "username", "login"):
+            if candidate in fields:
+                result["loginUserField"] = candidate
+                break
+print(json.dumps(result))

@@ -100,16 +100,18 @@ http --silent --show-error --dump-header /work/sso.headers --output /dev/null --
 login_url="$(location "$e2e_dir/sso.headers")"; [[ -n "$login_url" ]] || fail 'Nextcloud SSO did not redirect anonymous client to login'
 login_url="$(absolute_url "$login_url" http://e2e-nextcloud)"
 http --silent --show-error --dump-header /work/login.headers --output /work/login.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$login_url"
-# Current Nextcloud pages expose the CSRF value as data-requesttoken on <head>;
-# older templates can use a hidden input. The dedicated parser supports both forms.
+# Discover the actual credential form's action and username field from this exact
+# Nextcloud version. Do not assume that the page URL itself is the POST target.
 login_json="$(python3 "$workspace/tests/E2E/extract_saml_post_form.py" "$e2e_dir/login.html")"
 requesttoken="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["requesttoken"])' <<< "$login_json")"
+login_action="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["loginAction"])' <<< "$login_json")"
+login_user_field="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["loginUserField"])' <<< "$login_json")"
 [[ -n "$requesttoken" ]] || fail 'Nextcloud login page did not expose a request token'
-# The current login page exposes data-requesttoken for JavaScript requests. Send it
-# as both the documented requesttoken header and the conventional form parameter so
-# this HTTP-only test follows both supported server-side validation paths.
-login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --header "requesttoken: $requesttoken" --data-urlencode 'user=admin' --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken")
-http "${login_args[@]}" "$login_url"
+[[ -n "$login_action" && -n "$login_user_field" ]] || fail 'Nextcloud login page did not expose a supported credential form'
+login_action="$(absolute_url "$login_action" http://e2e-nextcloud)"
+# Send the discovered form fields and token through the header and form mechanisms.
+login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --header "requesttoken: $requesttoken" --data-urlencode "$login_user_field=admin" --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken")
+http "${login_args[@]}" "$login_action"
 return_url="$(location "$e2e_dir/login-submit.headers")"
 if [[ -z "$return_url" || "$return_url" == *'/login?'* || "$return_url" == */login ]]; then
   echo "--- Nextcloud login page headers ---" >&2
@@ -117,6 +119,8 @@ if [[ -z "$return_url" || "$return_url" == *'/login?'* || "$return_url" == */log
   echo "--- Nextcloud login page excerpt ---" >&2
   head -c 2048 "$e2e_dir/login.html" >&2 || true
   echo >&2
+  echo "--- Discovered Nextcloud credential form ---" >&2
+  printf '%s\n' "$login_json" >&2
   echo "--- Nextcloud login submit headers ---" >&2
   cat "$e2e_dir/login-submit.headers" >&2 || true
   echo "--- Nextcloud login submit excerpt ---" >&2

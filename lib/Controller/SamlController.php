@@ -168,11 +168,12 @@ class SamlController extends Controller {
             'cspNonce'    => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
         ], 'blank');
         $csp = new ContentSecurityPolicy();
-        $acsOrigin = $this->originOf($acsUrl);
-        if ($acsOrigin !== null) {
-            // form-action is a CSP source expression. Keep scheme and effective port:
-            // a bare host permits only its default port and blocks an ACS on :8001.
-            $csp->addAllowedFormActionDomain($acsOrigin);
+        // Nextcloud 34 validates this API argument as a domain, not a CSP source
+        // expression. Supplying an origin such as http://host:8001 therefore raises
+        // an InvalidArgumentException while the response is being rendered.
+        $acsHost = parse_url($acsUrl, PHP_URL_HOST);
+        if (is_string($acsHost) && $acsHost !== '') {
+            $csp->addAllowedFormActionDomain($acsHost);
         }
         $template->setContentSecurityPolicy($csp);
         return $template;

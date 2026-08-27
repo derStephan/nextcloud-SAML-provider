@@ -113,7 +113,7 @@ final class SamlControllerTest extends TestCase {
         self::assertSame('/after', $response->params['relayState']);
     }
 
-    public function testSamlPostResponseAllowsTheExactAcsOriginIncludingItsPort(): void {
+    public function testSamlPostResponseAllowsTheAcsHostForNextcloudCsp(): void {
         $sp = new ServiceProvider();
         $sp->setAcsUrl('http://sp.example.test:8001/acs');
         $service = $this->createMock(SamlService::class);
@@ -123,7 +123,7 @@ final class SamlControllerTest extends TestCase {
         $session = new Session(new User());
         $session->loggedIn = true;
         $response = $this->controller(new Request(['SAMLRequest' => 'request']), $session, $service)->sso();
-        self::assertSame(['http://sp.example.test:8001'], $response->contentSecurityPolicy->domains);
+        self::assertSame(['sp.example.test'], $response->contentSecurityPolicy->domains);
     }
 
     public function testSsoRedirectsAnonymousUserAfterValidRequest(): void {

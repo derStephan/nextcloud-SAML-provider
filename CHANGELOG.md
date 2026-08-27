@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.22
+
+- Fix Nextcloud 34 positive SSO rendering: pass only the parsed ACS host to `addAllowedFormActionDomain()`. Nextcloud 34 rejects a full scheme-and-port origin in that domain-only API and otherwise raises an HTTP 500 before the SAML response form can be rendered.
+- Keep the browser E2E flow unchanged: it continues to prove both rejected invalid IdP credentials and successful positive SSO.
+
 ## 0.7.21
 
 - Add a negative browser SSO scenario: deliberately invalid Nextcloud credentials must remain on the IdP login page, must not invoke Kimai ACS, and must not create a Kimai SAML user.

@@ -225,7 +225,7 @@ GitHub Actions runs the following dependency chain:
 ```text
 Unit tests
     -> Nextcloud integration tests
-        -> Kimai SAML end-to-end test
+        -> Kimai SAML interoperability test
             -> Release app (main only)
 ```
 
@@ -252,25 +252,15 @@ Container and application logs are printed if a smoke test fails, and the contai
 
 Before endpoint checks, each matrix container also runs `tests/Integration/nextcloud-api-contract.php` **inside the selected Nextcloud image**. It verifies the exact public OCP interfaces, methods, constants, base classes, response classes, migration types, and attributes used by production code. Because the version matrix is discovered dynamically, this check covers every current supported stable release and any available RC/beta image — not merely Nextcloud 33 or the local unit-test doubles. A removed or renamed framework API therefore blocks the integration stage before Kimai or release.
 
-### Kimai SAML end-to-end test
+### Kimai SAML browser end-to-end test
 
-After all Nextcloud matrix jobs are green, the `Kimai SAML end-to-end test` launches a private Docker network containing:
+After every Nextcloud integration matrix job succeeds, the `Kimai SAML end-to-end test` independently discovers **the same supported stable and explicit RC/beta Nextcloud image matrix**. For each entry it starts a private Docker network containing the selected Nextcloud IdP, `mariadb:11.4`, Kimai, and headless Chromium.
 
-- `nextcloud:34-apache` as the IdP under test;
-- `mariadb:11.4` for Kimai; and
-- `kimai/kimai2:apache` as a real SAML Service Provider.
+Each matrix job installs and enables the app in a fresh Nextcloud instance, verifies the migration table, creates ephemeral IdP signing material, registers Kimai as a Service Provider, and verifies both parties' metadata and Kimai's ACS endpoint. Chromium then opens Kimai's SAML login, follows the AuthnRequest redirect to Nextcloud, submits visible username and password credential controls, follows Nextcloud's normal redirect and generated SAML POST back to Kimai, and requires Kimai to create exactly one SAML-authenticated user for the test email.
 
-The test installs and enables the app in an ephemeral Nextcloud instance, checks that the `oc_saml_provider_sp` migration table exists, creates test-only self-signed IdP key material inside the container, and verifies that the IdP metadata endpoint responds. It then creates Kimai's SAML configuration from the test IdP endpoint and certificate, waits for MariaDB and Kimai to become ready, and verifies all of the following:
+The test does **not** scrape or replay Nextcloud HTML, hidden request tokens, generated form actions, or SAML form values. The browser owns cookies, CSRF behavior, redirects, JavaScript, and the auto-submitted SAML response, as it does for a real user. Its locators deliberately target user-facing credential controls rather than Nextcloud template classes or markup details.
 
-- Kimai publishes SAML metadata containing an `EntityDescriptor`;
-- that metadata advertises the expected Kimai ACS URL; and
-- Kimai's SAML ACS endpoint is enabled (it must not return `404`);
-- a full SP-initiated SSO exchange with a shared cookie jar: Kimai creates the AuthnRequest, Nextcloud redirects the anonymous client to its login page, the temporary administrator authenticates, Nextcloud returns a signed POST-binding response, and the test submits it to Kimai's ACS; and
-- provisioning: Kimai's real MariaDB database must contain exactly one imported user with the configured email and `saml` authentication mode.
-
-This is a full protocol-level HTTP test: it validates redirects, cookies, the real Nextcloud login form, AuthnRequest parsing, SP lookup, signed SAML POST binding, Kimai ACS validation, and SAML-user import. The generated SAML POST form is parsed by a dedicated HTML parser rather than by assumptions about HTML attribute order. The test prints explicit start and successful-end markers around the protocol trace so CI logs can be copied from a predictable point during debugging. It discovers the rendered Nextcloud credential form's POST target and username field at runtime, then submits the login request token as both the `requesttoken` header and form field, matching current and legacy validation paths. It deliberately does not assert visual rendering or JavaScript behavior, which are separate UI concerns.
-
-After a successful run, all containers, the temporary network, test certificates, database, browser-session files, and configuration are discarded. On failure, the test deliberately leaves its temporary containers alive long enough for the GitHub Actions diagnostic step to collect container logs; that workflow step then removes them. The temporary HTTP client runs with the CI runner's numeric UID/GID solely to write its cookie jar and response captures into the bind-mounted ephemeral test directory. The workflow receives no release credentials, signing keys, or App Store token.
+Failures preserve a Chromium screenshot for the affected matrix entry and print container logs. The workflow has no release credentials, signing keys, or App Store token. Because it is downstream of the Nextcloud integration matrix and runs per selected image, a failed version blocks release while successful versions cannot mask a failure in another matrix entry.
 
 ### Releases and App Store publication
 

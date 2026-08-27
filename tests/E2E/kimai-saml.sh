@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Isolated full SAML interoperability test. It deliberately has no release/App Store secrets.
 set -euo pipefail
-network=saml-e2e; nextcloud=e2e-nextcloud; kimai=e2e-kimai; mariadb=e2e-mariadb
+network="saml-e2e-${E2E_TARGET_SLUG:-nextcloud}"; nextcloud=e2e-nextcloud; kimai=e2e-kimai; mariadb=e2e-mariadb
 workspace="${GITHUB_WORKSPACE:-$PWD}"
 completed=false
 cleanup(){
@@ -79,80 +79,22 @@ printf '%s' "$metadata" | grep -q 'http://e2e-kimai:8001/auth/saml/acs' || fail 
 status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --output /dev/null --write-out '%{http_code}' -X POST http://e2e-kimai:8001/auth/saml/acs)"
 [[ "$status" != 404 ]] || fail 'Kimai SAML ACS endpoint is disabled'
 
-# Full SP-initiated SSO, driven by a shared cookie jar: Kimai AuthnRequest ->
-# Nextcloud login -> signed POST binding -> Kimai ACS -> database user import.
-e2e_dir="$workspace/build/e2e"; cookies="$e2e_dir/browser-cookies.txt"
-rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login-submit,acs}.headers "$e2e_dir"/{login,saml-response,acs}.html
-# Use the runner numeric UID/GID so cookie, header and response files are writable
-# in the shared E2E workspace bind mount on hosted and self-hosted runners alike.
-http() { docker run --rm --user "$(id -u):$(id -g)" --network "$network" --volume "$e2e_dir:/work" curlimages/curl:8.10.1 "$@"; }
-location() { sed -n 's/^[Ll]ocation: *\(.*\)\r*$/\1/p' "$1" | tail -n 1 | tr -d '\r'; }
-absolute_url() { case "$1" in http://*|https://*) printf '%s' "$1" ;; /*) printf '%s%s' "$2" "$1" ;; *) printf '%s/%s' "$2" "$1" ;; esac; }
-
+# Drive the entire user journey in a real browser. No Nextcloud login HTML,
+# CSRF representation, form action, or SAML POST form is parsed or replayed.
 echo '================================================================='
-echo 'ACTUAL KIMAI SSO TEST STARTS - copy logs from this line for debugging'
+echo 'KIMAI SAML BROWSER E2E STARTS - copy logs from this line'
 echo '================================================================='
-echo 'Starting full Kimai SSO flow'
-http --silent --show-error --dump-header /work/kimai-login.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" http://e2e-kimai:8001/auth/saml/login
-sso_url="$(location "$e2e_dir/kimai-login.headers")"; [[ -n "$sso_url" ]] || fail 'Kimai login did not redirect to Nextcloud'
-sso_url="$(absolute_url "$sso_url" http://e2e-kimai:8001)"; [[ "$sso_url" == http://e2e-nextcloud/apps/saml_provider/saml/sso\?* ]] || fail "unexpected IdP endpoint: $sso_url"
-http --silent --show-error --dump-header /work/sso.headers --output /dev/null --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$sso_url"
-login_url="$(location "$e2e_dir/sso.headers")"; [[ -n "$login_url" ]] || fail 'Nextcloud SSO did not redirect anonymous client to login'
-login_url="$(absolute_url "$login_url" http://e2e-nextcloud)"
-http --silent --show-error --dump-header /work/login.headers --output /work/login.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$login_url"
-# Discover the actual credential form's action and username field from this exact
-# Nextcloud version. Do not assume that the page URL itself is the POST target.
-login_json="$(python3 "$workspace/tests/E2E/extract_saml_post_form.py" "$e2e_dir/login.html")"
-requesttoken="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["requesttoken"])' <<< "$login_json")"
-login_action="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["loginAction"])' <<< "$login_json")"
-login_user_field="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["loginUserField"])' <<< "$login_json")"
-[[ -n "$requesttoken" ]] || fail 'Nextcloud login page did not expose a request token'
-[[ -n "$login_action" && -n "$login_user_field" ]] || fail 'Nextcloud login page did not expose a supported credential form'
-login_action="$(absolute_url "$login_action" http://e2e-nextcloud)"
-# Send the discovered form fields and token through the header and form mechanisms.
-login_args=(--silent --show-error --dump-header /work/login-submit.headers --output /work/login-submit.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --header "requesttoken: $requesttoken" --data-urlencode "$login_user_field=admin" --data-urlencode 'password=integration-test-password' --data-urlencode "requesttoken=$requesttoken")
-http "${login_args[@]}" "$login_action"
-return_url="$(location "$e2e_dir/login-submit.headers")"
-if [[ -z "$return_url" || "$return_url" == *'/login?'* || "$return_url" == */login ]]; then
-  echo "--- Nextcloud login page headers ---" >&2
-  cat "$e2e_dir/login.headers" >&2 || true
-  echo "--- Nextcloud login page excerpt ---" >&2
-  head -c 2048 "$e2e_dir/login.html" >&2 || true
-  echo >&2
-  echo "--- Discovered Nextcloud credential form ---" >&2
-  printf '%s\n' "$login_json" >&2
-  echo "--- Nextcloud login submit headers ---" >&2
-  cat "$e2e_dir/login-submit.headers" >&2 || true
-  echo "--- Nextcloud login submit excerpt ---" >&2
-  head -c 4096 "$e2e_dir/login-submit.html" >&2 || true
-  echo >&2
-  fail 'Nextcloud login did not establish the SSO return redirect'
-fi
-return_url="$(absolute_url "$return_url" http://e2e-nextcloud)"
-http --silent --show-error --dump-header /work/saml-response.headers --output /work/saml-response.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" "$return_url"
-# Parse the generated POST form rather than matching an assumed HTML attribute order.
-form_json="$(python3 "$workspace/tests/E2E/extract_saml_post_form.py" "$e2e_dir/saml-response.html")"
-acs_url="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["action"])' <<< "$form_json")"
-saml_response="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["SAMLResponse"])' <<< "$form_json")"
-if [[ "$acs_url" != 'http://e2e-kimai:8001/auth/saml/acs' || -z "$saml_response" ]]; then
-  echo "--- SSO return URL ---" >&2
-  printf '%s\n' "$return_url" >&2
-  echo "--- SSO response headers ---" >&2
-  cat "$e2e_dir/saml-response.headers" >&2 || true
-  echo "--- SSO response form parse ---" >&2
-  printf '%s\n' "$form_json" >&2
-  echo "--- SSO response excerpt ---" >&2
-  head -c 4096 "$e2e_dir/saml-response.html" >&2 || true
-  echo >&2
-  fail "Nextcloud did not return the expected SAML POST form (ACS: ${acs_url:-none})"
-fi
-http --silent --show-error --dump-header /work/acs.headers --output /work/acs.html --cookie "/work/$(basename "$cookies")" --cookie-jar "/work/$(basename "$cookies")" --request POST --data-urlencode "SAMLResponse=$saml_response" "$acs_url"
-acs_status="$(awk 'NR == 1 {print $2}' "$e2e_dir/acs.headers" | tr -d '\r')"; [[ "$acs_status" =~ ^30[12378]$ ]] || fail "Kimai rejected signed SAML response (HTTP ${acs_status:-none})"
+mkdir -p "$workspace/build/e2e/browser-artifacts"
+docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
+  --volume "$workspace/tests/E2E/kimai-saml-browser.mjs:/work/kimai-saml-browser.mjs:ro" \
+  --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
+  --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
+  "${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.54.0-noble}" \
+  node /work/kimai-saml-browser.mjs
 user_count="$(docker exec "$mariadb" mariadb -N -ukimai -pkimai kimai -e "SELECT COUNT(*) FROM kimai2_users WHERE email = 'admin@example.test' AND auth = 'saml'" 2>/dev/null || true)"
-[[ "$user_count" == '1' ]] || fail "Kimai did not import SAML user (count: ${user_count:-none})"
-rm -f "$cookies" "$e2e_dir"/{kimai-login,sso,login,login-submit,saml-response,acs}.headers "$e2e_dir"/{login,login-submit,saml-response,acs}.html
+[[ "$user_count" == '1' ]] || fail "Kimai did not import the browser-authenticated SAML user (count: ${user_count:-none})"
+echo 'Kimai SAML browser end-to-end test passed.'
 completed=true
-echo 'Kimai SAML full browser-style SSO test passed.'
-echo '==============================================================='
-echo 'ACTUAL KIMAI SSO TEST ENDED SUCCESSFULLY - end of test trace'
-echo '==============================================================='
+echo '=========================================================='
+echo 'KIMAI SAML BROWSER E2E ENDED SUCCESSFULLY - end of trace'
+echo '=========================================================='

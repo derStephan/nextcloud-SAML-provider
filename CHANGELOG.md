@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.5
+
+- Run the Kimai SAML end-to-end gate across the same dynamically discovered Nextcloud stable and explicit RC/beta Docker-image matrix as the integration workflow.
+- Drive the complete Kimai-initiated SAML login with headless Chromium and verify the imported Kimai SAML user, rather than parsing Nextcloud login HTML, request tokens, or form actions.
+- Preserve failure diagnostics with per-matrix browser screenshots and container logs, while keeping the release pipeline fail-closed.
+
+## 0.7.4
+
+- Keep the mandatory Kimai release gate focused on stable real-container SAML interoperability: migration, IdP/SP metadata, configured ACS, and endpoint availability.
+- Remove the UI-coupled browser-login experiment from the release gate; Nextcloud login template details are not an app compatibility contract and must not block releases when they change across supported server versions.
+- Clarify the README distinction between the dynamic real-Nextcloud API compatibility matrix, the mandatory Kimai interoperability gate, and a future non-blocking browser-login canary.
+
 ## 0.7.3
 
 - Make the Kimai E2E login submit to the action and username field discovered from the actual Nextcloud login form, rather than assuming the displayed login URL or a fixed field name.

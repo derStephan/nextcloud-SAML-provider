@@ -168,10 +168,11 @@ class SamlController extends Controller {
             'cspNonce'    => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
         ], 'blank');
         $csp = new ContentSecurityPolicy();
-        $acsHost = parse_url($acsUrl, PHP_URL_HOST);
-        if (is_string($acsHost) && $acsHost !== '') {
-            // ContentSecurityPolicy accepts a host/domain here, not the full ACS URL.
-            $csp->addAllowedFormActionDomain($acsHost);
+        $acsOrigin = $this->originOf($acsUrl);
+        if ($acsOrigin !== null) {
+            // form-action is a CSP source expression. Keep scheme and effective port:
+            // a bare host permits only its default port and blocks an ACS on :8001.
+            $csp->addAllowedFormActionDomain($acsOrigin);
         }
         $template->setContentSecurityPolicy($csp);
         return $template;

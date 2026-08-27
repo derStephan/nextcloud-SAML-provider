@@ -8,6 +8,8 @@ await mkdir(artifactDirectory, { recursive: true });
 const browser = await chromium.launch({ headless: true }); const context = await browser.newContext(); const page = await context.newPage(); page.setDefaultTimeout(20_000);
 page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) note('navigation', { url: frame.url() }); });
 page.on('response', (response) => { const url = response.url(); if (url.includes('/auth/saml/') || url.includes('/apps/saml_provider/') || url.includes('/login')) note('response', { status: response.status(), url }); });
+page.on('console', (message) => note('browser-console', { type: message.type(), text: message.text() }));
+page.on('pageerror', (error) => note('browser-page-error', { message: error.message }));
 async function snapshot(name) { const title = await page.title().catch(() => ''); const html = await page.content().catch(() => ''); await page.screenshot({ path: `${artifactDirectory}/${name}.png`, fullPage: true }).catch(() => {}); await writeFile(`${artifactDirectory}/${name}.html`, html.slice(0, 200_000)); note('snapshot', { name, url: page.url(), title }); }
 const kimaiAuthenticated = (url) => url.origin === expectedKimaiOrigin && !url.pathname.startsWith('/auth/saml');
 try {

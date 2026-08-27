@@ -113,6 +113,19 @@ final class SamlControllerTest extends TestCase {
         self::assertSame('/after', $response->params['relayState']);
     }
 
+    public function testSamlPostResponseAllowsTheExactAcsOriginIncludingItsPort(): void {
+        $sp = new ServiceProvider();
+        $sp->setAcsUrl('http://sp.example.test:8001/acs');
+        $service = $this->createMock(SamlService::class);
+        $service->method('parseAuthnRequest')->willReturn(['id' => '_id', 'issuer' => 'sp', 'acsUrl' => null, 'nameIdPolicy' => null, 'rawXml' => '<request/>']);
+        $service->method('resolveServiceProvider')->willReturn($sp);
+        $service->method('buildResponse')->willReturn('encoded-response');
+        $session = new Session(new User());
+        $session->loggedIn = true;
+        $response = $this->controller(new Request(['SAMLRequest' => 'request']), $session, $service)->sso();
+        self::assertSame(['http://sp.example.test:8001'], $response->contentSecurityPolicy->domains);
+    }
+
     public function testSsoRedirectsAnonymousUserAfterValidRequest(): void {
         $sp = new ServiceProvider();
         $sp->setAcsUrl('https://sp.example.test/acs');

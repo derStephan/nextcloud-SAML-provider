@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.16
+
+- Preserve the complete registered ACS origin — scheme, host, and effective port — in Nextcloud's `form-action` CSP allowance. This permits SAML POST binding to a non-default-port ACS such as `http://e2e-kimai:8001` instead of allowing only the host's default port.
+- Add a regression test for an ACS running on port 8001.
+- Record browser console messages and page errors in the SSO-flow artifact, including any future CSP violation.
+
 ## 0.7.15
 
 - After Nextcloud renders its own signed SAML POST page, wait for the normal JavaScript auto-submit and then, only when that rendered form remains visible, activate its existing Continue button through Chromium. The test never reads, rebuilds, or manually posts SAML values.

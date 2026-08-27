@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.7.15
+
+- After Nextcloud renders its own signed SAML POST page, wait for the normal JavaScript auto-submit and then, only when that rendered form remains visible, activate its existing Continue button through Chromium. The test never reads, rebuilds, or manually posts SAML values.
+- Preserve a pre-handoff screenshot and HTML capture for the SAML POST page.
+- Specify the MariaDB server version as `11.4.0-MariaDB`, matching Doctrine's expected server-reported format and removing its DBAL version-detection deprecation warning.
+
 ## 0.7.14
 
 - Standardize the Kimai E2E matrix-discovery step with the Nextcloud integration workflow: matching labels, explicit stable/RC-beta outcomes, and the discovered matrix in the log.

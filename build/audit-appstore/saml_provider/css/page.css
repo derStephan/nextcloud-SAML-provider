@@ -1,0 +1,6 @@
+#saml-provider-page { max-width: 700px; margin: 3em auto; padding: 0 1em; }
+#saml-provider-page .sp-tile { display: flex; align-items: center; gap: 1em; padding: 1em 1.5em; margin-bottom: .75em;
+  border: 1px solid var(--color-border); border-radius: var(--border-radius-large); text-decoration: none; color: inherit; }
+#saml-provider-page .sp-tile:hover { background: var(--color-background-hover); }
+#saml-provider-page .sp-tile .icon { width: 32px; height: 32px; }
+#saml-provider-page .empty { color: var(--color-text-maxcontrast); }

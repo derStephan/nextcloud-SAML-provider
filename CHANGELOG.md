@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
 
+## 0.8.0
+
+### Audit readiness
+
+- Complete a source, documentation, localization, packaging, workflow, and test-strategy preflight for external code audit.
+- Stabilize UI translation message IDs and synchronize all browser and server-side locale catalogs with the English source keys.
+- Add CI guards that reject missing or mismatched locale keys and block an empty, assertions-light, or incompletely mapped unit-test suite before PHPUnit runs.
+- Retain layered verification: behavioral unit tests with cryptographic/XML assertions, real Nextcloud public-API contracts, and positive and negative browser SSO against Kimai.
+
+## 0.7.39
+
+- Align the README with the fail-closed App Store release workflow: required protected credentials, runtime-only archive allowlist, mandatory App Store registration, and release-loop protection are now documented.
+
+## 0.7.38
+
+- Harden App Store publication: build an explicit runtime-only package before integrity signing, excluding CI configuration, tests, documentation sources, release tooling, and development metadata.
+- Make successful protected releases publish to the Nextcloud App Store through its API instead of silently falling back to a GitHub-only release when an opt-in variable is absent.
+- Prevent release recursion: bot-authored release commits carry an explicit marker that blocks their later workflow-run chain from creating another release.
+
 ## 0.7.37
 
 - Capture the complete Nextcloud SAML Provider admin settings content in E2E documentation screenshots by expanding Nextcloud's nested settings scroll container to its actual content height before the Playwright full-page capture.
@@ -388,15 +407,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.7.38] - 2026-08-27
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

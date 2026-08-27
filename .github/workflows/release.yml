@@ -13,7 +13,8 @@ jobs:
   release:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main' &&
+      !contains(github.event.workflow_run.head_commit.message, '[skip automated release]')
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -109,7 +110,12 @@ jobs:
           php scripts/prepare-release.php "$MIN_VERSION" "$MAX_VERSION" "$RELEASE_REASON"
           version="$(cat release-version.txt)"; echo "number=$version" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add appinfo/info.xml CHANGELOG.md README.md docs/admin-settings-e2e-nc*.png; git commit -m "Release v${version}"; git tag -a "v${version}" -m "Release v${version}"; git push origin HEAD:main --follow-tags
+          # This marker is evaluated in the workflow_run release gate. The pushed
+          # release commit still receives normal CI, but can never initiate a second release.
+          git add appinfo/info.xml CHANGELOG.md README.md docs/admin-settings-e2e-nc*.png
+          git commit -m "Release v${version} [skip automated release]"
+          git tag -a "v${version}" -m "Release v${version}"
+          git push origin HEAD:main --follow-tags
       - name: Create signed archive
         if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         env:
@@ -119,21 +125,28 @@ jobs:
         run: |
           set -euo pipefail; umask 077
           printf '%s' "$NEXTCLOUD_SIGNING_PRIVATE_KEY" > signing.key; printf '%s' "$NEXTCLOUD_SIGNING_CERTIFICATE" > signing.crt
-          mkdir -p build/release/saml_provider; git archive --format=tar HEAD | tar -x -C build/release/saml_provider
+          # Build an explicit runtime-only staging directory. Do not use git archive:
+          # it would ship CI definitions, tests, release scripts, and other source-only files.
+          scripts/create-appstore-package.sh build/release
           # /var/www/html is a Docker volume and is empty before the image entrypoint initializes it.
           # The unmodified Nextcloud source, including occ, is always available at /usr/src/nextcloud.
           docker run --rm --entrypoint php --volume "$PWD/build/release:/release" --volume "$PWD/signing.key:/secrets/signing.key:ro" --volume "$PWD/signing.crt:/secrets/signing.crt:ro" "nextcloud:${NEXTCLOUD_VERSION}-apache" /usr/src/nextcloud/occ integrity:sign-app --privateKey=/secrets/signing.key --certificate=/secrets/signing.crt --path=/release/saml_provider
-          test -f build/release/saml_provider/appinfo/signature.json; tar -C build/release -czf build/saml_provider.tar.gz saml_provider; rm -f signing.key signing.crt
+          # Verify the signed staging directory once more before it becomes the public artifact.
+          scripts/verify-appstore-package.sh build/release/saml_provider
+          tar -C build/release -czf build/saml_provider.tar.gz saml_provider
+          rm -f signing.key signing.crt
       - name: Create GitHub Release
         if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.number }}
         run: gh release create "v${VERSION}" build/saml_provider.tar.gz --title "v${VERSION}" --generate-notes
-      # Safe by default: a GitHub Release is created, but the App Store is only updated
-      # when the repository variable PUBLISH_TO_APPSTORE is explicitly set to true.
+      # The GitHub Release asset is public and immutable for this tag. The App Store
+      # action registers that exact asset using the App Store API token and signing key.
+      # Missing protected-environment secrets fail this release rather than silently
+      # creating a GitHub-only release.
       - name: Publish to Nextcloud App Store
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true' && vars.PUBLISH_TO_APPSTORE == 'true'
+        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         uses: R0Wi/nextcloud-appstore-push-action@a011fe619bcf6e77ddebc96f9908e1af4071b9c1
         with:
           app_name: saml_provider

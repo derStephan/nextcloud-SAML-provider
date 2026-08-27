@@ -50,6 +50,10 @@ jobs:
           coverage: xdebug
       - name: Public API preflight
         run: bash tests/Integration/public-api-preflight.sh
+      - name: Verify UI translation catalogs
+        run: python3 tests/Integration/check-localization.py
+      - name: Verify unit-test integrity
+        run: python3 tests/Integration/check-test-suite-integrity.py
       - run: composer install --no-interaction --prefer-dist
       - run: composer test:coverage
       - name: Upload coverage report

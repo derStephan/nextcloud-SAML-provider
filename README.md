@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -31,6 +31,8 @@ This project was developed with assistance from **GPT 5.6 Terra by OpenAI**, inc
 ## Translations
 
 The app includes English and German plus AI-assisted draft catalogues for 18 additional widely spoken languages: Arabic, Bengali, Chinese (Simplified), Spanish, French, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese (Brazil), Russian, Thai, Turkish, Ukrainian, Urdu, and Vietnamese. Please review translations in your native language before relying on them in production, especially security-related wording. English remains the fallback for strings awaiting community review.
+
+All browser (`.json`/`.js`) and server-rendered (`.php`) locale catalogs are checked in CI against the English source key sets. The check prevents a UI change from shipping with a missing, stale, or mismatched message key; it does not claim linguistic review of AI-assisted draft wording.
 
 ## Requirements
 
@@ -236,7 +238,7 @@ Each downstream workflow is triggered through `workflow_run` only when its direc
 - a failed Kimai run blocks release; and
 - a release run first confirms that the tested commit is still the current `main` commit, avoiding a release of a superseded revision.
 
-Unit tests run on the currently supported PHP versions discovered from the lifecycle API. They install the Composer dependencies, run PHPUnit, generate Clover coverage, enforce the 80% full-`lib/` gate, and upload the report to Codecov. A Codecov upload issue does not turn a successful test suite into a failed build. Framework compatibility is deliberately not inferred from unit-test doubles; it is enforced by the real-container API contract stage described below.
+Unit tests run on the currently supported PHP versions discovered from the lifecycle API. Before PHPUnit starts, CI verifies the complete browser and server-side localization catalogs and checks the unit-test suite itself for a minimum number of test methods and assertion sites, empty test files, and explicit coverage mapping for the production surface. It then installs the Composer dependencies, runs PHPUnit, generates Clover coverage, enforces the 80% full-`lib/` gate, and uploads the report to Codecov. A Codecov upload issue does not turn a successful test suite into a failed build. Framework compatibility is deliberately not inferred from unit-test doubles; it is enforced by the real-container API contract stage described below.
 
 ### Nextcloud integration tests
 
@@ -263,20 +265,38 @@ Diagnostics are named with the app version, Nextcloud matrix target, GitHub run 
 
 ### Releases and App Store publication
 
-A release workflow can run only after the green Kimai workflow and only for a successful `main` commit. It runs in the protected `release` environment and performs these steps:
+The **Release app** workflow runs only after the green Kimai workflow for the current `main` commit and only inside the protected `release` environment. It is fail-closed: if a required screenshot, signing credential, App Store credential, or validation step is missing, the release fails instead of publishing a partial GitHub-only release.
 
-1. confirms that the tested SHA remains the current `main` tip;
-2. derives the tested stable Nextcloud compatibility range;
-3. decides whether a release is required (a scheduled compatibility check skips a release when the range is unchanged);
-4. downloads the populated admin-page screenshot artifacts from the **exact successful Kimai E2E workflow run** that triggered this release;
-5. requires one target-named, decodable PNG for every successful E2E matrix job, copies them into `docs/` (for example `docs/admin-settings-e2e-nc34.png`), and aborts rather than publishing stale or incomplete screenshot documentation;
-6. updates release metadata, commits the validated screenshots together with the release metadata, and creates an annotated tag;
-7. signs the archive with the protected Nextcloud signing key, verifies `appinfo/signature.json`, and creates `saml_provider.tar.gz`;
-8. creates a GitHub Release and attaches that signed archive.
+The workflow performs these steps:
 
-The Nextcloud App Store is deliberately **opt-in**. By default, the workflow creates the signed GitHub Release but does **not** publish to the App Store. Publication happens only when the repository variable `PUBLISH_TO_APPSTORE` is set exactly to `true`; only then is the protected `NEXTCLOUD_APPSTORE_TOKEN` used to submit the already published GitHub Release archive. This makes the default behavior a practical release sign-off/dry run for App Store delivery.
+1. confirms that the tested SHA is still the current `main` tip;
+2. derives the tested stable Nextcloud compatibility range and skips scheduled releases when that range is unchanged;
+3. imports the populated admin-page screenshots from the **exact successful Kimai E2E workflow run**, requiring one valid PNG per successful stable matrix job;
+4. updates `appinfo/info.xml`, the changelog, README compatibility marker, and App Store screenshot URLs; then commits those release metadata changes and creates an annotated tag;
+5. stages a **runtime-only** `saml_provider/` directory containing only `appinfo/`, `lib/`, `templates/`, `js/`, `css/`, `img/`, `l10n/`, and `LICENSE`;
+6. signs that staging directory using `occ integrity:sign-app`, requiring the generated `appinfo/signature.json`, and validates the allowlist again immediately before archiving;
+7. publishes that signed archive as the GitHub Release asset; and
+8. registers that exact public GitHub Release asset with the Nextcloud App Store API.
 
-The App Store listing is generated from `appinfo/info.xml`, including summary, description, license, supported Nextcloud versions, repository URL, issue tracker URL, author, and public screenshot URLs. The release workflow writes those screenshot URLs from the validated E2E images committed to `docs/`; a file merely existing in `docs/` is not shown by the App Store until it is referenced here.
+The installed App Store archive deliberately excludes `.github/`, `tests/`, `docs/`, `scripts/`, `build/`, `.git/`, Composer and PHPUnit development metadata, and repository documentation such as this README and the changelog. These files remain in the source repository but are not installed on Nextcloud servers.
+
+### Required protected release configuration
+
+The protected `release` environment must contain:
+
+| Configuration | Purpose |
+| --- | --- |
+| `NEXTCLOUD_SIGNING_PRIVATE_KEY` | Signs the staged app through Nextcloud's integrity-signing command and authenticates the App Store submission. |
+| `NEXTCLOUD_SIGNING_CERTIFICATE` | Public certificate used while creating `appinfo/signature.json`. |
+| `NEXTCLOUD_APPSTORE_TOKEN` | API token from the maintainer's Nextcloud App Store account, used to register the published archive. |
+
+There is no separate opt-in switch for App Store publication: a successful release is intended to reach both GitHub Releases and the Nextcloud App Store. Missing protected credentials cause a failure rather than an incomplete release.
+
+### Release-loop protection
+
+The release workflow commits updated metadata and screenshots back to `main`. That push starts normal CI again, but the release commit contains the marker `[skip automated release]`. The release job explicitly refuses workflow chains whose triggering commit contains that marker. Therefore the bot-generated commit can be tested, but cannot generate a second release.
+
+The App Store listing is generated from `appinfo/info.xml`, including the summary, description, license, supported Nextcloud versions, repository URL, issue tracker URL, author, and public screenshot URLs. The release workflow writes current validated E2E screenshot URLs into that metadata; an image merely existing in `docs/` is not displayed until it is referenced there.
 
 ## Security notes
 
@@ -306,13 +326,6 @@ Not implemented:
 - Attribute Query
 - Service Provider-initiated and propagated Single Logout requests
 - Per-service assertion encryption
-
-## App Store and releases
-
-The App Store listing is generated from `appinfo/info.xml`, including the summary, long description, license, supported Nextcloud versions, repository URL, issue tracker URL, author, and public screenshot URLs.
-
-The **Release app** workflow runs only after the complete green chain — Unit tests, Nextcloud integration matrix, and Kimai browser E2E — for `main`. It imports and validates the exact triggering E2E screenshots, updates the patch version and tested compatibility range, signs the final archive, and creates a GitHub Release. App Store submission remains opt-in through `PUBLISH_TO_APPSTORE=true`. Release signing material is available exclusively to the protected `release` environment.
-
 
 ## License
 

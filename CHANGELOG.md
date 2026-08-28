@@ -434,6 +434,14 @@
 
 ## [Unreleased]
 
+## [0.8.11] - 2026-08-28
+
+### Fixed
+
+- Align OCP request and app-configuration contracts with the real Nextcloud public API.
+- Keep unavoidable SAML Redirect raw-query access isolated in RawQueryService after confirming that IRequest exposes decoded parameters only.
+
+
 ## [0.8.10] - 2026-08-28
 
 ### Fixed

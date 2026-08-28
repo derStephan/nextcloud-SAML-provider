@@ -106,7 +106,8 @@ final class SamlControllerTest extends TestCase {
 
     public function testSsoRedirectPreservesRawQueryOnlyAfterRequestValidation(): void {
         $service = $this->validService($this->provider());
-        $request = new Request(['SAMLRequest' => 'decoded value'], 'GET', ['QUERY_STRING' => 'SAMLRequest=decoded%20value&RelayState=next']);
+        $_SERVER['QUERY_STRING'] = 'SAMLRequest=decoded%20value&RelayState=next';
+        $request = new Request(['SAMLRequest' => 'decoded value'], 'GET');
         $response = $this->controller($request, new Session(), $service)->sso();
         self::assertSame(302, $response->status);
         self::assertStringContainsString('redirect_url=%2Fsaml_provider.saml.sso%3FSAMLRequest%3Ddecoded%2520value%26RelayState%3Dnext', $response->redirectURL);

@@ -18,7 +18,7 @@ $contracts = [
     'OCP\\Server' => ['get'],
     'OCP\\IURLGenerator' => ['getAbsoluteURL', 'linkToRouteAbsolute', 'linkTo', 'getBaseUrl', 'imagePath'],
     'OCP\\IUser' => ['getUID', 'getEMailAddress', 'getDisplayName'],
-    'OCP\\IRequest' => ['getParam', 'getParams', 'getMethod', 'getServerParam'],
+    'OCP\\IRequest' => ['getParam', 'getParams', 'getMethod'],
     'OCP\\IUserSession' => ['isLoggedIn', 'getUser', 'logout'],
     'OCP\\IL10N' => ['t'],
     'OCP\\IDBConnection' => ['getQueryBuilder'],
@@ -81,11 +81,10 @@ function requireSignature(string $class, string $method, array $parameterNames, 
     }
 }
 requireSignature('OCP\\IAppConfig', 'getValueString', ['app', 'key', 'default', 'lazy'], 'string', $missing);
-requireSignature('OCP\\IAppConfig', 'setValueString', ['app', 'key', 'value', 'lazy', 'sensitive'], 'void', $missing);
-requireSignature('OCP\\IRequest', 'getParam', ['key'], 'mixed', $missing);
+requireSignature('OCP\\IAppConfig', 'setValueString', ['app', 'key', 'value', 'lazy', 'sensitive'], 'bool', $missing);
+requireSignature('OCP\\IRequest', 'getParam', ['key', 'default'], null, $missing);
 requireSignature('OCP\\IRequest', 'getParams', [], 'array', $missing);
 requireSignature('OCP\\IRequest', 'getMethod', [], 'string', $missing);
-requireSignature('OCP\\IRequest', 'getServerParam', ['key', 'default'], 'mixed', $missing);
 foreach (['OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit', 'OCP\\AppFramework\\Http\\Attribute\\UserRateLimit'] as $attribute) {
     if (class_exists($attribute)) {
         requireSignature($attribute, '__construct', ['limit', 'period'], null, $missing);

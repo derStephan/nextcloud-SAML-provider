@@ -28,7 +28,7 @@ Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External application
 
 - HTTP-Redirect AuthnRequests are limited to 1 MiB after Base64 decoding and DEFLATE expansion.
 - AuthnRequest IssueInstant values must be within five minutes of the IdP clock; synchronize IdP and Service Provider clocks with NTP or Chrony.
-- Redirect-binding signatures are verified over the raw query string obtained through Nextcloud’s request abstraction; reverse proxies must preserve the original query string.
+- Redirect-binding signatures are verified over the untouched server query string because Nextcloud’s public IRequest API exposes only decoded parameters; reverse proxies must preserve the original query string.
 
 ## Development transparency
 

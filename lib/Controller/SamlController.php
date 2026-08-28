@@ -76,7 +76,7 @@ class SamlController extends Controller {
             $this->samlService->enforceNameIdPolicy($authnRequest, $sp);
             $this->samlService->enforceRequestSignature(
                 $authnRequest, $binding, $this->request->getParams(), $sp,
-                $this->rawQuery->fromRequest($this->request)
+                $this->rawQuery->current()
             );
         } catch (\Throwable $e) {
             // Do not concatenate attacker-influenced parser details into logs.
@@ -89,7 +89,7 @@ class SamlController extends Controller {
             // absolute URL is resolved again by some supported server versions.
             $ssoUrl = $this->urlGenerator->linkToRouteAbsolute('saml_provider.saml.sso');
             $currentUrl = (string)(parse_url($ssoUrl, PHP_URL_PATH) ?? '/');
-            $queryString = $this->rawQuery->fromRequest($this->request);
+            $queryString = $this->rawQuery->current();
             if ($queryString !== '') {
                 $currentUrl .= '?' . $queryString;
             }

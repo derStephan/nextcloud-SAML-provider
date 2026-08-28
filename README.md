@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** maintained Nextcloud major releases plus the newest available RC/Beta
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Use Nextcloud as a **SAML 2.0 Identity Provider**. People sign in to connected services with their existing Nextcloud account; administrators manage those services in one place.
@@ -82,7 +82,7 @@ The complete Kimai configuration and troubleshooting guidance are in the [Kimai 
 A release is a deliberate maintainer action, not a side effect of a green push.
 
 1. Unit tests run on the currently supported PHP 8.2+ versions.
-2. Nextcloud integration tests run the app on Nextcloud 33 and 34 with SQLite, MariaDB, and PostgreSQL. They exercise the production mapper, schema upgrade, metadata, and SSO rejection paths.
+2. Nextcloud integration tests discover maintained Nextcloud major releases and the newest available RC/Beta. Each target runs with SQLite, MariaDB, and PostgreSQL. They exercise the production mapper, schema upgrade, metadata, and SSO rejection paths.
 3. The Kimai end-to-end workflow configures the app through the browser, completes a real SAML login, and captures the administration screenshots above.
 4. A maintainer starts the protected **Release app** workflow from `main`, enters the version, compatibility range, and release notes.
 5. The workflow signs a runtime-only App Store archive, verifies it, tags the release, and creates the GitHub release.

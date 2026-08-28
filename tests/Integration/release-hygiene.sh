@@ -24,17 +24,14 @@ grep -q '^  workflow_dispatch:' "$release" || { echo 'Release must require workf
 ! grep -q '^  push:' "$release" || { echo 'Release must not be triggered by push.' >&2; exit 1; }
 grep -q 'environment: release' "$release" || { echo 'Release must use protected release environment.' >&2; exit 1; }
 
-# Compatibility evidence must be reviewable within the commit, rather than supplied
-# by an unauthenticated-at-build-time lifecycle or Docker Hub API response.
-# The PHP unit-test matrix intentionally follows currently supported PHP minors.
-# Release evidence must remain reviewable, so dynamic Nextcloud/Docker discovery
-# is forbidden only in integration, browser-E2E, and release workflows.
-for workflow in .github/workflows/nextcloud-integration.yml .github/workflows/kimai-saml-e2e.yml .github/workflows/release.yml; do
-    ! grep -Eq 'endoflife\.date|hub\.docker\.com' "$workflow" || { echo "Dynamic release matrix source in $workflow" >&2; exit 1; }
+# Test coverage follows maintained Nextcloud releases and the newest available
+# RC/Beta at run time. The protected manual release still records the explicit
+# range that was proven by that successful run; it must not derive metadata itself.
+for workflow in .github/workflows/nextcloud-integration.yml .github/workflows/kimai-saml-e2e.yml; do
+    grep -q 'endoflife\.date/api/nextcloud.json' "$workflow" || { echo "Maintained Nextcloud discovery missing in $workflow" >&2; exit 1; }
+    grep -q 'hub.docker.com/v2/repositories/library/nextcloud/tags' "$workflow" || { echo "Nextcloud RC/Beta discovery missing in $workflow" >&2; exit 1; }
 done
-
-grep -q "nextcloud:33-apache" .github/workflows/nextcloud-integration.yml || { echo 'Missing explicit Nextcloud compatibility target.' >&2; exit 1; }
-grep -q "nextcloud:34-apache" .github/workflows/nextcloud-integration.yml || { echo 'Missing explicit Nextcloud compatibility target.' >&2; exit 1; }
+! grep -Eq 'endoflife\.date|hub\.docker\.com' .github/workflows/release.yml || { echo 'Release workflow must not derive compatibility from external APIs.' >&2; exit 1; }
 
 # Package scripts are allowlist based and must keep source-only trees out.
 grep -q 'for entry in appinfo css img js l10n lib templates LICENSE' scripts/create-appstore-package.sh || { echo 'Runtime package allowlist missing.' >&2; exit 1; }

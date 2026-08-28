@@ -434,6 +434,15 @@
 
 ## [Unreleased]
 
+## [0.8.14] - 2026-08-28
+
+### Fixed
+
+- Restore discovery of maintained Nextcloud releases and the newest available RC/Beta for integration and Kimai browser tests.
+- Upgrade artifact uploads to `actions/upload-artifact@v6`, which runs on Node.js 24.
+- Wait for the durable generated certificate field in browser setup instead of a transient translated toast notification.
+
+
 ## [0.8.13] - 2026-08-28
 
 ### Fixed

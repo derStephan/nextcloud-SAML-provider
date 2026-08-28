@@ -1,30 +1,40 @@
 name: Kimai SAML end-to-end test
-
 on:
   workflow_run:
     workflows: ["Nextcloud integration tests"]
     types: [completed]
-
 permissions:
   contents: read
-
 concurrency:
   group: kimai-saml-e2e-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: true
-
 jobs:
-  kimai-saml:
+  nextcloud-versions:
     if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        name: Discover maintained Nextcloud releases and newest RC/Beta
+        shell: bash
+        run: |
+          set -euo pipefail
+          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | select(tonumber >= 33) | {label: ., image: ("nextcloud:" + . + "-apache")} ] | sort_by(.label | tonumber)')"
+          prerelease="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error 'https://hub.docker.com/v2/repositories/library/nextcloud/tags?ordering=last_updated&page_size=100' | jq --compact-output '[.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+((RC|rc)[0-9]+|(beta|Beta)[0-9]+)-apache$")) | {label: ("pre-release " + .name), image: ("nextcloud:" + .name)}] | first // empty')"
+          if [[ -n "$prerelease" && "$prerelease" != null ]]; then matrix="$(jq --compact-output --argjson prerelease "$prerelease" '. + [$prerelease]' <<< "$stable")"; else matrix="$stable"; echo 'No current Nextcloud RC/beta Apache image found; testing maintained stable majors only.'; fi
+          [[ "$matrix" != '[]' ]] || { echo 'No maintained Nextcloud versions were returned.' >&2; exit 1; }
+          echo "Testing Nextcloud matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+  kimai-saml:
+    needs: nextcloud-versions
     name: Nextcloud ${{ matrix.target.label }} with Kimai
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        # This is release evidence, so it is deliberately static and reviewable.
-        target:
-          - { label: '33', image: 'nextcloud:33-apache' }
-          - { label: '34', image: 'nextcloud:34-apache' }
+        target: ${{ fromJSON(needs.nextcloud-versions.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -49,7 +59,7 @@ jobs:
         run: bash tests/E2E/kimai-saml.sh
       - name: Upload current admin screenshot
         if: success()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: kimai-saml-admin-screenshot-v${{ steps.app-version.outputs.version }}-nc${{ matrix.target.label }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
           path: docs/admin-settings-e2e-nc${{ matrix.target.label }}.png
@@ -60,12 +70,10 @@ jobs:
         run: |
           mkdir -p build/e2e/browser-artifacts
           docker ps -a | tee build/e2e/browser-artifacts/docker-ps.txt
-          for container in e2e-nextcloud e2e-kimai e2e-mariadb; do
-            docker logs "$container" 2>&1 | tee "build/e2e/browser-artifacts/${container}.log" || true
-          done
+          for container in e2e-nextcloud e2e-kimai e2e-mariadb; do docker logs "$container" 2>&1 | tee "build/e2e/browser-artifacts/${container}.log" || true; done
       - name: Upload browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: kimai-saml-browser-diagnostics-${{ matrix.target.label }}
           path: build/e2e/browser-artifacts

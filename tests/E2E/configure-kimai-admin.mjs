@@ -29,7 +29,10 @@ try {
   const certificateButton = page.getByRole('button', { name: 'Generate certificate', exact: true });
   if (await certificateButton.isVisible().catch(() => false)) {
     await certificateButton.click();
-    await page.getByText('Certificate generated', { exact: true }).waitFor({ state: 'visible' });
+    // A toast is transient and translated. The durable product outcome is the
+    // re-rendered PEM certificate field, so wait for that instead.
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('input.saml-provider-copy'))
+      .some((input) => input.value.includes('BEGIN CERTIFICATE')), null, { timeout: 25_000 });
   }
   const certificate = await page.locator('input.saml-provider-copy').evaluateAll((inputs) => {
     const field = inputs.find((input) => input.value.includes('BEGIN CERTIFICATE'));

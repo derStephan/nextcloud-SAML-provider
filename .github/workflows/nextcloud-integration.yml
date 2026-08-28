@@ -6,18 +6,31 @@ on:
 permissions:
   contents: read
 jobs:
-  integration:
+  nextcloud-versions:
     if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        name: Discover maintained Nextcloud releases and newest RC/Beta
+        shell: bash
+        run: |
+          set -euo pipefail
+          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | select(tonumber >= 33) | {label: ., image: ("nextcloud:" + . + "-apache")} ] | sort_by(.label | tonumber)')"
+          prerelease="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error 'https://hub.docker.com/v2/repositories/library/nextcloud/tags?ordering=last_updated&page_size=100' | jq --compact-output '[.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+((RC|rc)[0-9]+|(beta|Beta)[0-9]+)-apache$")) | {label: ("pre-release " + .name), image: ("nextcloud:" + .name)}] | first // empty')"
+          if [[ -n "$prerelease" && "$prerelease" != null ]]; then matrix="$(jq --compact-output --argjson prerelease "$prerelease" '. + [$prerelease]' <<< "$stable")"; else matrix="$stable"; echo 'No current Nextcloud RC/beta Apache image found; testing maintained stable majors only.'; fi
+          [[ "$matrix" != '[]' ]] || { echo 'No maintained Nextcloud versions were returned.' >&2; exit 1; }
+          echo "Testing Nextcloud matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+  integration:
+    needs: nextcloud-versions
     name: Nextcloud ${{ matrix.target.label }} / ${{ matrix.database.label }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Reviewed, fixed compatibility evidence. Do not derive release targets from
-        # a network API during CI. Extend this list in a pull request after testing.
-        target:
-          - { label: '33', image: 'nextcloud:33-apache' }
-          - { label: '34', image: 'nextcloud:34-apache' }
+        target: ${{ fromJSON(needs.nextcloud-versions.outputs.matrix) }}
         database:
           - { label: SQLite, driver: sqlite }
           - { label: MariaDB, driver: mysql }
@@ -38,15 +51,10 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 60); do
-            if [[ "${{ matrix.database.driver }}" == 'mysql' ]]; then
-              docker exec integration-db mariadb-admin ping -h localhost -unextcloud -pintegration-test-password --silent && exit 0
-            else
-              docker exec integration-db pg_isready -U nextcloud -d nextcloud && exit 0
-            fi
+            if [[ "${{ matrix.database.driver }}" == 'mysql' ]]; then docker exec integration-db mariadb-admin ping -h localhost -unextcloud -pintegration-test-password --silent && exit 0; else docker exec integration-db pg_isready -U nextcloud -d nextcloud && exit 0; fi
             sleep 2
           done
-          docker logs integration-db >&2 || true
-          exit 1
+          docker logs integration-db >&2 || true; exit 1
       - name: Start Nextcloud
         run: docker run -d --name nextcloud-under-test --network nextcloud-integration --publish 8080:80 --volume "$GITHUB_WORKSPACE:/var/www/html/custom_apps/saml_provider:ro" "${{ matrix.target.image }}"
       - name: Run installation, migration, and production-mapper contracts

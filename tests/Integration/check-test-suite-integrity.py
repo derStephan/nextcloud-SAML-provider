@@ -31,14 +31,50 @@ for test in tests:
 coverage_test = {
     'Admin': 'AdminSettingsTest.php',
     'Version0001Date20260826000000': 'MigrationContractTest.php',
-    'ServiceProviderMapper': 'ServiceProviderTest.php',
+    'Version0002Date20260828000000': 'MigrationContractTest.php',
 }
 missing = sorted(
     name for name in production
-    if name not in {'Application'}
+    if name not in {'Application', 'ServiceProviderMapper'}
     and not (root/'tests'/'Unit'/coverage_test.get(name, f'{name}Test.php')).exists()
 )
+persistence_contract = root / 'tests' / 'Integration' / 'persistence-contract.php'
+if not persistence_contract.exists():
+    missing.append('ServiceProviderMapper persistence-contract.php')
+else:
+    contract_source = persistence_contract.read_text(encoding='utf-8')
+    required_mapper_operations = ['new ServiceProviderMapper(', '$mapper->insert(', '$mapper->find(', '$mapper->update(', '$mapper->delete(']
+    absent = [operation for operation in required_mapper_operations if operation not in contract_source]
+    if absent:
+        missing.append('ServiceProviderMapper persistence contract operations: ' + ', '.join(absent))
+upgrade_contracts = [
+    root / 'tests' / 'Integration' / 'prepare-version0002-upgrade.php',
+    root / 'tests' / 'Integration' / 'upgrade-index-contract.php',
+]
+for upgrade_contract in upgrade_contracts:
+    if not upgrade_contract.exists():
+        missing.append('Version0002 real upgrade contract: ' + upgrade_contract.name)
 if methods < 30 or assertions < 100 or uncovered or missing:
     print(f'Unit-test integrity failed: methods={methods}, assertion-sites={assertions}, empty={uncovered}, missing-named-tests={missing}', file=sys.stderr)
     sys.exit(1)
 print(f'Unit-test integrity passed: {len(tests)} files, {methods} test methods, {assertions} assertion sites.')
+
+
+# Critical regression contracts must remain explicit; aggregate assertion counters are not quality evidence.
+critical_contracts = {
+    'tests/Integration/persistence-contract.php': ['insert(', 'update(', 'delete(', 'Unique'],
+    'tests/Integration/upgrade-index-contract.php': ['is_enabled'],
+    'tests/Integration/smoke.sh': ['migrations:execute', 'upgrade-index-contract.php'],
+    'tests/Integration/prepare-signed-request-policy.php': ['setRequireSignedRequests(true)'],
+    'tests/Integration/smoke.sh': ['--data-urlencode', '== 400'],
+    'tests/E2E/kimai-saml-browser.mjs': ['auto-submit', 'waitForURL'],
+}
+for relative, required in critical_contracts.items():
+    content = (root / relative).read_text(encoding='utf-8')
+    for marker in required:
+        if marker not in content:
+            raise SystemExit(f'Critical behavioral contract {relative} is missing marker: {marker}')
+browser_contract = (root / 'tests/E2E/kimai-saml-browser.mjs').read_text(encoding='utf-8')
+if re.search(r'getByRole\([\"\']button[\"\'].*Continue|text=Continue', browser_contract):
+    raise SystemExit('Browser E2E must not click the manual Continue fallback; auto-submit is required.')
+print('Critical behavioral-contract checks passed.')

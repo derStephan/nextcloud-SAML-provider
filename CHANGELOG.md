@@ -1,8 +1,34 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+## 0.8.5
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses [Semantic Versioning](https://semver.org/).
+### Security and audit remediation
+
+### Follow-up remediation in the same unreleased 0.8.5 line
+
+### Dead-code and API-surface cleanup
+
+### Database and migration hardening
+
+- Add a SQLite, MariaDB, and PostgreSQL Nextcloud integration matrix that runs the production mapper through real DBAL CRUD operations.
+- Make fresh schemas portable: no TEXT defaults, a portable 255-character unique Entity ID, and an enabled-service index.
+- Add an additive upgrade migration for the enabled-service index; legacy SLO columns are deliberately ignored rather than destructively dropped.
+
+- Remove unused IdP organization update and certificate-import paths; certificates are generated and managed by the app.
+- Remove unused SLO URL configuration from fresh schemas, entity serialization, the admin API, initial state, and UI. Existing database columns are ignored for backward compatibility.
+- Remove unconsumed NameIDPolicy parsing, empty bootstrap callbacks, obsolete controller mapper injection, unused PNG assets, a dead CSS selector, and the unused release archive script.
+
+- Bind decoded Redirect-binding parameters to the exact raw values covered by the SAML signature and reject duplicate signed query parameters.
+- Make fresh schema definitions portable across SQLite, MariaDB/MySQL, and PostgreSQL by removing unsupported TEXT defaults and persisting non-null entity values.
+- Validate SLO URLs and attribute-mapping object/value schema before persistence.
+- Remove obsolete source-only release packaging code and correct documentation so fixture provisioning is not presented as mapper write-path coverage.
+
+- Bound Redirect-binding DEFLATE output before allocation, suppress parser warnings for malformed unauthenticated XML, and require the direct SAML protocol Issuer plus required request fields.
+- Remove the unvalidated SLO endpoint and its metadata advertisement; no external GET request can terminate a Nextcloud session through this app.
+- Make IdP-initiated login a two-step flow: GET renders a same-origin confirmation page, while only a CSRF-protected POST creates an unsolicited assertion.
+- Check every OpenSSL certificate-generation operation before persisting key material.
+- Remove generated `build/` copies from the source distribution and keep packaging limited to explicit runtime files.
+- Correct release and test documentation to distinguish tested behavior from future coverage goals.
 
 ## 0.8.0
 
@@ -407,15 +433,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
 ## [Unreleased]
-
-## [0.8.1] - 2026-08-27
-
-### Changed
-
-- Automated release after successful quality checks.
-- Tested stable Nextcloud compatibility range: 33 through 34.
-- Release trigger: workflow_run.
-
 
 ### Added
 

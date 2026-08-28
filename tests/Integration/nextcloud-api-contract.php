@@ -15,9 +15,10 @@ require_once $nextcloudRoot . '/lib/base.php';
 /** @var array<string, list<string>> $contracts */
 $contracts = [
     'OCP\\IAppConfig' => ['getValueString', 'setValueString'],
+    'OCP\\Server' => ['get'],
     'OCP\\IURLGenerator' => ['getAbsoluteURL', 'linkToRouteAbsolute', 'linkTo', 'getBaseUrl', 'imagePath'],
     'OCP\\IUser' => ['getUID', 'getEMailAddress', 'getDisplayName'],
-    'OCP\\IRequest' => ['getParam', 'getParams', 'getMethod'],
+    'OCP\\IRequest' => ['getParam', 'getParams', 'getMethod', 'getServerParam'],
     'OCP\\IUserSession' => ['isLoggedIn', 'getUser', 'logout'],
     'OCP\\IL10N' => ['t'],
     'OCP\\IDBConnection' => ['getQueryBuilder'],
@@ -38,14 +39,13 @@ $contracts = [
     'OCP\\DB\\ISchemaWrapper' => ['hasTable', 'createTable'],
 ];
 $types = [
-    'OCP\\AppFramework\\Bootstrap\\IBootstrap',
-    'OCP\\AppFramework\\Bootstrap\\IBootContext',
-    'OCP\\AppFramework\\Bootstrap\\IRegistrationContext',
     'OCP\\AppFramework\\Db\\DoesNotExistException',
     'OCP\\AppFramework\\Http\\Attribute\\AuthorizedAdminSetting',
     'OCP\\AppFramework\\Http\\Attribute\\NoAdminRequired',
     'OCP\\AppFramework\\Http\\Attribute\\NoCSRFRequired',
     'OCP\\AppFramework\\Http\\Attribute\\PublicPage',
+    'OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit',
+    'OCP\\AppFramework\\Http\\Attribute\\UserRateLimit',
     'OCP\\Migration\\IOutput',
 ];
 $missing = [];
@@ -65,6 +65,33 @@ foreach ($types as $type) {
         $missing[] = "missing type: $type";
     }
 }
+/** @param class-string $class */
+function requireSignature(string $class, string $method, array $parameterNames, ?string $returnType, array &$missing): void {
+    if (!method_exists($class, $method)) {
+        return;
+    }
+    $reflection = new ReflectionMethod($class, $method);
+    $actualNames = array_map(static fn(ReflectionParameter $parameter): string => $parameter->getName(), $reflection->getParameters());
+    if ($actualNames !== $parameterNames) {
+        $missing[] = "incompatible parameter list: $class::$method expected (" . implode(', ', $parameterNames) . ') got (' . implode(', ', $actualNames) . ')';
+    }
+    $actualReturn = $reflection->getReturnType();
+    if ($returnType !== null && ($actualReturn === null || (string)$actualReturn !== $returnType)) {
+        $missing[] = "incompatible return type: $class::$method expected $returnType got " . ($actualReturn === null ? 'none' : (string)$actualReturn);
+    }
+}
+requireSignature('OCP\\IAppConfig', 'getValueString', ['app', 'key', 'default', 'lazy'], 'string', $missing);
+requireSignature('OCP\\IAppConfig', 'setValueString', ['app', 'key', 'value', 'lazy', 'sensitive'], 'void', $missing);
+requireSignature('OCP\\IRequest', 'getParam', ['key'], 'mixed', $missing);
+requireSignature('OCP\\IRequest', 'getParams', [], 'array', $missing);
+requireSignature('OCP\\IRequest', 'getMethod', [], 'string', $missing);
+requireSignature('OCP\\IRequest', 'getServerParam', ['key', 'default'], 'mixed', $missing);
+foreach (['OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit', 'OCP\\AppFramework\\Http\\Attribute\\UserRateLimit'] as $attribute) {
+    if (class_exists($attribute)) {
+        requireSignature($attribute, '__construct', ['limit', 'period'], null, $missing);
+    }
+}
+
 if (!defined('OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_INT')
     || !defined('OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_BOOL')
     || !defined('OCP\\DB\\QueryBuilder\\IQueryBuilder::PARAM_STR')) {

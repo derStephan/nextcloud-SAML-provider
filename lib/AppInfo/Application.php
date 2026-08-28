@@ -4,20 +4,12 @@ declare(strict_types=1);
 namespace OCA\SAMLProvider\AppInfo;
 
 use OCP\AppFramework\App;
-use OCP\AppFramework\Bootstrap\IBootContext;
-use OCP\AppFramework\Bootstrap\IBootstrap;
-use OCP\AppFramework\Bootstrap\IRegistrationContext;
 
-class Application extends App implements IBootstrap {
+/** Application container for the SAML Provider app. */
+class Application extends App {
     public const APP_ID = 'saml_provider';
 
     public function __construct(array $urlParams = []) {
         parent::__construct(self::APP_ID, $urlParams);
-    }
-
-    public function register(IRegistrationContext $context): void {
-    }
-
-    public function boot(IBootContext $context): void {
     }
 }

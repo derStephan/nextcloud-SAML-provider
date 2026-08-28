@@ -33,9 +33,8 @@ class SamlService {
     public function buildMetadataXml(): string {
         $entityId = htmlspecialchars($this->idpConfig->getEntityId(), ENT_XML1);
         $sso      = htmlspecialchars($this->idpConfig->getSsoUrl(), ENT_XML1);
-        $slo      = htmlspecialchars($this->idpConfig->getSloUrl(), ENT_XML1);
-        $cert     = $this->idpConfig->getCertificateBase64();
-        $org      = htmlspecialchars($this->idpConfig->getOrgName(), ENT_XML1);
+                $cert     = $this->idpConfig->getCertificateBase64();
+        $org      = 'Nextcloud';
         $wantSigned = $this->spMapper->anyRequiresSignedRequests() ? 'true' : 'false';
 
         return <<<XML
@@ -52,7 +51,6 @@ class SamlService {
     <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat>
     <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="{$sso}"/>
     <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{$sso}"/>
-    <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="{$slo}"/>
   </md:IDPSSODescriptor>
   <md:Organization>
     <md:OrganizationName xml:lang="en">{$org}</md:OrganizationName>
@@ -78,7 +76,7 @@ XML;
             throw new \InvalidArgumentException('SAMLRequest is invalid or exceeds the size limit');
         }
         if ($binding === 'redirect') {
-            $inflated = @gzinflate($raw);
+            $inflated = @gzinflate($raw, self::MAX_AUTHN_REQUEST_BYTES + 1);
             if ($inflated === false || strlen($inflated) > self::MAX_AUTHN_REQUEST_BYTES) {
                 throw new \InvalidArgumentException('SAMLRequest DEFLATE decompression failed or exceeds the size limit');
             }
@@ -92,7 +90,13 @@ XML;
         }
         $doc = new \DOMDocument();
         // Do not load DTDs or substitute entities; LIBXML_NONET prevents network access.
-        $loadStatus = $doc->loadXML($raw, LIBXML_NONET | LIBXML_NOCDATA);
+        $previousLibxmlErrors = libxml_use_internal_errors(true);
+        try {
+            $loadStatus = $doc->loadXML($raw, LIBXML_NONET | LIBXML_NOCDATA);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previousLibxmlErrors);
+        }
 
         if (!$loadStatus) {
             throw new \InvalidArgumentException('SAMLRequest is not well-formed XML');
@@ -109,17 +113,59 @@ XML;
         $xpath->registerNamespace('samlp', self::NS_SAMLP);
         $xpath->registerNamespace('saml', self::NS_SAML);
 
-        // Robust XPath querying using local-name() to bypass namespace prefix issues (e.g. default namespace)
-        $issuer = trim($xpath->evaluate('string(//*[local-name()="Issuer"])'));
-        $policy = $xpath->evaluate('string(//*[local-name()="NameIDPolicy"]/@Format)');
+        // Only direct protocol children are authoritative. A value in Extensions or
+        // another nested XML subtree must never select the Service Provider.
+        $issuer = trim((string)$xpath->evaluate('string(/samlp:AuthnRequest/saml:Issuer)'));
+        $requestId = $root->getAttribute('ID');
+        if ($issuer === '' || !preg_match('/^[A-Za-z_][A-Za-z0-9._-]{0,255}$/D', $requestId)
+            || $root->getAttribute('Version') !== '2.0') {
+            throw new \InvalidArgumentException('SAMLRequest is missing required protocol fields');
+        }
+        $destination = $root->getAttribute('Destination');
+        if ($destination !== '' && !hash_equals($this->idpConfig->getSsoUrl(), $destination)) {
+            throw new \InvalidArgumentException('SAMLRequest Destination does not match this IdP');
+        }
+        $issueInstant = $root->getAttribute('IssueInstant');
+        try {
+            $issuedAt = new \DateTimeImmutable($issueInstant);
+        } catch (\Exception) {
+            throw new \InvalidArgumentException('SAMLRequest has an invalid IssueInstant');
+        }
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        if (abs($now->getTimestamp() - $issuedAt->getTimestamp()) > 300) {
+            throw new \InvalidArgumentException('SAMLRequest IssueInstant is outside the permitted clock skew');
+        }
+        $protocolBinding = $root->getAttribute('ProtocolBinding');
+        if ($protocolBinding !== '' && $protocolBinding !== 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST') {
+            throw new \InvalidArgumentException('SAMLRequest requests an unsupported response binding');
+        }
+        $nameIdPolicy = $xpath->evaluate('string(/samlp:AuthnRequest/samlp:NameIDPolicy/@Format)');
+        if ($nameIdPolicy !== '' && !in_array($nameIdPolicy, [
+            'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+            'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent',
+            'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified',
+        ], true)) {
+            throw new \InvalidArgumentException('SAMLRequest requests an unsupported NameID format');
+        }
 
         return [
-            'id'           => $root->getAttribute('ID'),
+            'id'           => $requestId,
             'issuer'       => $issuer,
             'acsUrl'       => $root->getAttribute('AssertionConsumerServiceURL') ?: null,
-            'nameIdPolicy' => $policy !== '' ? $policy : null,
+            'nameIdPolicy' => $nameIdPolicy !== '' ? $nameIdPolicy : null,
             'rawXml'       => $raw,
         ];
+    }
+
+    /** Reject a request that asks this SP for a different NameID representation. */
+    public function enforceNameIdPolicy(array $authnRequest, ServiceProvider $sp): void {
+        $requestedFormat = $authnRequest['nameIdPolicy'] ?? null;
+        if ($requestedFormat === null || $requestedFormat === 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified') {
+            return;
+        }
+        if (!is_string($requestedFormat) || !hash_equals($sp->getNameIdFormat(), $requestedFormat)) {
+            throw new \RuntimeException('SAMLRequest NameIDPolicy does not match the configured service format');
+        }
     }
 
     public function resolveServiceProvider(string $entityId): ServiceProvider {
@@ -238,9 +284,9 @@ XML;
 </saml2p:Response>
 XML;
 
-        if ($sp->getSignAssertions()) {
-            $response = $this->signXml($response, $responseId);
-        }
+        // Sign both the assertion and its enclosing response. Older releases
+        // exposed a misleading per-SP toggle; security must not depend on it.
+        $response = $this->signXml($response, $responseId);
 
         return base64_encode($response);
     }
@@ -248,7 +294,7 @@ XML;
     private function resolveNameId(ServiceProvider $sp, IUser $user): string {
         return match ($sp->getNameIdFormat()) {
             'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'
-                => hash('sha256', $user->getUID() . '|' . $sp->getSpEntityId()),
+                => hash_hmac('sha256', $user->getUID() . '|' . $sp->getSpEntityId(), $this->idpConfig->getPersistentNameIdPepper()),
             'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress'
                 => $user->getEMailAddress() ?: $user->getUID(),
             default => $user->getUID(),
@@ -364,6 +410,10 @@ XML;
     }
 
     private function e(string $value): string {
-        return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        // XML 1.0 forbids several C0 control characters. Strip them before
+        // escaping user profile data so one malformed display name cannot turn
+        // a login attempt into a server error during signature construction.
+        $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', '', $value) ?? '';
+        return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

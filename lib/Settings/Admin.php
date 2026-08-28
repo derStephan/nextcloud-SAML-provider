@@ -31,8 +31,6 @@ class Admin implements ISettings {
         $this->initialState->provideInitialState('idp', [
             'entityId'             => $this->idpConfig->getEntityId(),
             'ssoUrl'               => $this->idpConfig->getSsoUrl(),
-            'sloUrl'               => $this->idpConfig->getSloUrl(),
-            'orgName'              => $this->idpConfig->getOrgName(),
             'hasCertificate'       => $this->idpConfig->hasCertificate(),
             'certificate'          => $this->idpConfig->getCertificate(),
             'certificateSingleLine' => IdpConfigService::pemToBase64($this->idpConfig->getCertificate()),

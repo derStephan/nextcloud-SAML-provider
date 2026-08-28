@@ -1,159 +1,102 @@
 name: Release app
+
 on:
-  workflow_run:
-    workflows: ["Kimai SAML end-to-end test"]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact semantic version to release, for example 0.8.6'
+        required: true
+        type: string
+      min_nextcloud:
+        description: 'Lowest Nextcloud major proven by the reviewed CI matrix'
+        required: true
+        default: '33'
+        type: string
+      max_nextcloud:
+        description: 'Highest Nextcloud major proven by the reviewed CI matrix'
+        required: true
+        default: '34'
+        type: string
+      release_notes:
+        description: 'Specific, user-visible Markdown release notes (not boilerplate)'
+        required: true
+        type: string
+
 permissions:
   contents: write
-  actions: read
+
 concurrency:
   group: app-release
   cancel-in-progress: false
+
 jobs:
   release:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      !contains(github.event.workflow_run.head_commit.message, '[skip automated release]')
-    runs-on: ubuntu-latest
+    # The protected release environment is the approval gate. This workflow never
+    # starts from a push or from workflow_run, and it releases only the selected ref.
     environment: release
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
-      - name: Confirm current main commit
-        id: current
+      - name: Validate manual release inputs
         env:
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERSION: ${{ inputs.version }}
+          MIN_VERSION: ${{ inputs.min_nextcloud }}
+          MAX_VERSION: ${{ inputs.max_nextcloud }}
+          NOTES: ${{ inputs.release_notes }}
         run: |
           set -euo pipefail
-          git fetch origin main
-          if [[ "$(git rev-parse origin/main)" != "$HEAD_SHA" ]]; then
-            echo "current=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "current=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Discover tested stable Nextcloud range
-        if: steps.current.outputs.current == 'true'
-        id: compatibility
-        run: |
-          set -euo pipefail
-          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | select(tonumber >= 33) | tonumber] | sort')"
-          min="$(jq 'first' <<< "$stable")"; max="$(jq 'last' <<< "$stable")"
-          [[ "$min" != "null" && "$max" != "null" ]]
-          echo "min=$min" >> "$GITHUB_OUTPUT"; echo "max=$max" >> "$GITHUB_OUTPUT"
-      - name: Decide scheduled-release need
-        if: steps.current.outputs.current == 'true'
-        id: decision
-        env:
-          EVENT: ${{ github.event.workflow_run.event }}
-          MIN_VERSION: ${{ steps.compatibility.outputs.min }}
-          MAX_VERSION: ${{ steps.compatibility.outputs.max }}
-        run: |
-          set -euo pipefail
-          current_range="$(sed -n 's/.*<nextcloud min-version="\([0-9]*\)"\( max-version="\([0-9]*\)"\)\{0,1\}\/.*/\1 \3/p' appinfo/info.xml)"
-          if [[ "$EVENT" == "schedule" && "$current_range" == "$MIN_VERSION $MAX_VERSION" ]]; then echo "release=false" >> "$GITHUB_OUTPUT"; else echo "release=true" >> "$GITHUB_OUTPUT"; fi
-      - name: Import tested admin screenshots
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          E2E_RUN_ID: ${{ github.event.workflow_run.id }}
-        run: |
-          set -euo pipefail
-          echo "Importing admin screenshots only from successful Kimai E2E run ${E2E_RUN_ID}."
-          artifact_urls="$(gh api --paginate "repos/${REPOSITORY}/actions/runs/${E2E_RUN_ID}/artifacts?per_page=100"             --jq '.artifacts[] | select(.expired == false) | select(.name | startswith("kimai-saml-admin-screenshot-")) | .archive_download_url')"
-          [[ -n "$artifact_urls" ]] || { echo "No current admin screenshot artifacts were produced by E2E run ${E2E_RUN_ID}. Refusing to release stale documentation." >&2; exit 1; }
-          temp="$(mktemp -d)"; trap 'rm -rf "$temp"' EXIT
-          count=0
-          while IFS= read -r artifact_url; do
-            archive="$temp/$count.zip"
-            gh api "$artifact_url" > "$archive"
-            unzip -q "$archive" -d "$temp/extract-$count"
-            count=$((count + 1))
-          done <<< "$artifact_urls"
-          mkdir -p docs
-          mapfile -t screenshots < <(find "$temp" -type f -regextype posix-extended -regex '.*/admin-settings-e2e-nc[A-Za-z0-9._-]+\.png' | sort)
-          [[ ${#screenshots[@]} -gt 0 ]] || { echo "E2E artifacts did not contain target-named admin screenshots. Refusing to release." >&2; exit 1; }
-          for screenshot in "${screenshots[@]}"; do
-            filename="$(basename "$screenshot")"
-            # Validate PNG structure using only Python's standard library. GitHub's
-            # runner does not guarantee Pillow, and no third-party package is needed
-            # to reject a non-PNG, truncated header, or invalid image dimensions.
-            python3 -c 'import struct, sys; data = open(sys.argv[1], "rb").read(24); assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"; assert data[12:16] == b"IHDR", "missing PNG IHDR"; width, height = struct.unpack(">II", data[16:24]); assert width > 0 and height > 0, "invalid PNG dimensions"' "$screenshot"
-            cp "$screenshot" "docs/$filename"
-            echo "Imported tested screenshot: docs/$filename"
-          done
-          expected="$(gh api --paginate "repos/${REPOSITORY}/actions/runs/${E2E_RUN_ID}/jobs?per_page=100" --jq '[.jobs[] | select(.name | startswith("Nextcloud ")) | select(.conclusion == "success")] | length')"
-          [[ "$expected" =~ ^[1-9][0-9]*$ ]] || { echo "Could not determine successful E2E matrix jobs." >&2; exit 1; }
-          [[ ${#screenshots[@]} -eq $expected ]] || { echo "Expected ${expected} E2E screenshots, imported ${#screenshots[@]}. Refusing incomplete documentation release." >&2; exit 1; }
-          # The App Store does not discover files merely because they live in docs/.
-          # Publish each release-tested image through info.xml as a stable GitHub Raw URL.
-          REPOSITORY="$REPOSITORY" python3 -c 'from pathlib import Path; import os, re; info = Path("appinfo/info.xml"); text = info.read_text(); text = re.sub(r"\n    <screenshot>https://raw\.githubusercontent\.com/[^<]+/docs/admin-settings-e2e-nc[^<]+</screenshot>", "", text); files = sorted(Path("docs").glob("admin-settings-e2e-nc*.png")); assert files, "No imported admin screenshots are available for App Store metadata."; base = f"https://raw.githubusercontent.com/{os.environ["REPOSITORY"]}/main/docs/"; tags = "".join(f"\n    <screenshot>{base}{image.name}</screenshot>" for image in files); anchor = "    <repository>"; pos = text.find(anchor); assert pos >= 0, "Cannot find repository metadata anchor in appinfo/info.xml."; line_end = text.find("\n", pos); info.write_text(text[:line_end] + tags + text[line_end:]); print("Updated App Store screenshot metadata for: " + ", ".join(image.name for image in files))'
-          echo "Imported ${#screenshots[@]} validated screenshots from E2E run ${E2E_RUN_ID}."
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Version must be semantic x.y.z.' >&2; exit 1; }
+          [[ "$MIN_VERSION" =~ ^[0-9]+$ && "$MAX_VERSION" =~ ^[0-9]+$ ]] || { echo 'Nextcloud versions must be majors.' >&2; exit 1; }
+          (( MIN_VERSION <= MAX_VERSION )) || { echo 'Minimum version exceeds maximum version.' >&2; exit 1; }
+          [[ -n "${NOTES//[[:space:]]/}" ]] || { echo 'Release notes must be specific.' >&2; exit 1; }
+          [[ "$(git branch --show-current)" == 'main' ]] || { echo 'Releases must run from main.' >&2; exit 1; }
       - uses: shivammathur/setup-php@v2
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         with:
           php-version: '8.3'
           extensions: dom, openssl, pdo_sqlite
           coverage: none
-      - name: Prepare metadata, commit, and tag
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
-        id: version
+      - name: Prepare reviewed metadata and changelog
         env:
-          MIN_VERSION: ${{ steps.compatibility.outputs.min }}
-          MAX_VERSION: ${{ steps.compatibility.outputs.max }}
-          RELEASE_REASON: ${{ github.event.workflow_run.event }}
+          VERSION: ${{ inputs.version }}
+          MIN_VERSION: ${{ inputs.min_nextcloud }}
+          MAX_VERSION: ${{ inputs.max_nextcloud }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: php scripts/prepare-release.php "$VERSION" "$MIN_VERSION" "$MAX_VERSION"
+      - name: Commit and tag manual release
+        id: release
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          php scripts/prepare-release.php "$MIN_VERSION" "$MAX_VERSION" "$RELEASE_REASON"
-          version="$(cat release-version.txt)"; echo "number=$version" >> "$GITHUB_OUTPUT"
-          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # This marker is evaluated in the workflow_run release gate. The pushed
-          # release commit still receives normal CI, but can never initiate a second release.
-          git add appinfo/info.xml CHANGELOG.md README.md docs/admin-settings-e2e-nc*.png
-          git commit -m "Release v${version} [skip automated release]"
-          git tag -a "v${version}" -m "Release v${version}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add appinfo/info.xml CHANGELOG.md README.md
+          git diff --cached --quiet && { echo 'Release produced no metadata changes.' >&2; exit 1; }
+          git commit -m "Release v${VERSION}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
           git push origin HEAD:main --follow-tags
-      - name: Create signed archive
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Create signed runtime-only archive
         env:
           NEXTCLOUD_SIGNING_PRIVATE_KEY: ${{ secrets.NEXTCLOUD_SIGNING_PRIVATE_KEY }}
           NEXTCLOUD_SIGNING_CERTIFICATE: ${{ secrets.NEXTCLOUD_SIGNING_CERTIFICATE }}
-          NEXTCLOUD_VERSION: ${{ steps.compatibility.outputs.max }}
+          NEXTCLOUD_VERSION: ${{ inputs.max_nextcloud }}
         run: |
-          set -euo pipefail; umask 077
-          printf '%s' "$NEXTCLOUD_SIGNING_PRIVATE_KEY" > signing.key; printf '%s' "$NEXTCLOUD_SIGNING_CERTIFICATE" > signing.crt
-          # Build an explicit runtime-only staging directory. Do not use git archive:
-          # it would ship CI definitions, tests, release scripts, and other source-only files.
+          set -euo pipefail
+          umask 077
+          secrets_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/saml-provider-signing.XXXXXX")"
+          trap 'rm -rf "$secrets_dir"' EXIT
+          printf '%s' "$NEXTCLOUD_SIGNING_PRIVATE_KEY" > "$secrets_dir/signing.key"
+          printf '%s' "$NEXTCLOUD_SIGNING_CERTIFICATE" > "$secrets_dir/signing.crt"
           scripts/create-appstore-package.sh build/release
-          # /var/www/html is a Docker volume and is empty before the image entrypoint initializes it.
-          # The unmodified Nextcloud source, including occ, is always available at /usr/src/nextcloud.
-          docker run --rm --entrypoint php --volume "$PWD/build/release:/release" --volume "$PWD/signing.key:/secrets/signing.key:ro" --volume "$PWD/signing.crt:/secrets/signing.crt:ro" "nextcloud:${NEXTCLOUD_VERSION}-apache" /usr/src/nextcloud/occ integrity:sign-app --privateKey=/secrets/signing.key --certificate=/secrets/signing.crt --path=/release/saml_provider
-          # Verify the signed staging directory once more before it becomes the public artifact.
+          docker run --rm --entrypoint php --volume "$PWD/build/release:/release" --volume "$secrets_dir:/secrets:ro" "nextcloud:${NEXTCLOUD_VERSION}-apache" /usr/src/nextcloud/occ integrity:sign-app --privateKey=/secrets/signing.key --certificate=/secrets/signing.crt --path=/release/saml_provider
           scripts/verify-appstore-package.sh build/release/saml_provider
           tar -C build/release -czf build/saml_provider.tar.gz saml_provider
-          rm -f signing.key signing.crt
       - name: Create GitHub Release
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.number }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: gh release create "v${VERSION}" build/saml_provider.tar.gz --title "v${VERSION}" --generate-notes
-      # The GitHub Release asset is public and immutable for this tag. The App Store
-      # action registers that exact asset using the App Store API token and signing key.
-      # Missing protected-environment secrets fail this release rather than silently
-      # creating a GitHub-only release.
-      - name: Publish to Nextcloud App Store
-        if: steps.current.outputs.current == 'true' && steps.decision.outputs.release == 'true'
-        uses: R0Wi/nextcloud-appstore-push-action@a011fe619bcf6e77ddebc96f9908e1af4071b9c1
-        with:
-          app_name: saml_provider
-          appstore_token: ${{ secrets.NEXTCLOUD_APPSTORE_TOKEN }}
-          download_url: https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.number }}/saml_provider.tar.gz
-          app_private_key: ${{ secrets.NEXTCLOUD_SIGNING_PRIVATE_KEY }}
-          nightly: false
-      - name: Remove signing material
-        if: always()
-        run: rm -f signing.key signing.crt

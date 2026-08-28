@@ -10,16 +10,13 @@ class ServiceProvider extends Entity implements JsonSerializable {
     protected string $spEntityId = '';
     protected string $spName = '';
     protected string $acsUrl = '';
-    protected ?string $sloUrl = null;
-    protected ?string $spCertificate = null;
+    protected string $spCertificate = '';
     protected string $nameIdFormat = 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress';
-    protected ?string $attributeMapping = null;
-    protected bool $signAssertions = true;
+    protected string $attributeMapping = '{}';
     protected bool $requireSignedRequests = false;
     protected bool $isEnabled = true;
 
     public function __construct() {
-        $this->addType('signAssertions', 'boolean');
         $this->addType('requireSignedRequests', 'boolean');
         $this->addType('isEnabled', 'boolean');
     }
@@ -51,21 +48,12 @@ class ServiceProvider extends Entity implements JsonSerializable {
         $this->markFieldUpdated('acsUrl');
     }
 
-    public function getSloUrl(): string {
-        return $this->sloUrl ?? '';
-    }
-
-    public function setSloUrl(?string $sloUrl): void {
-        $this->sloUrl = $sloUrl;
-        $this->markFieldUpdated('sloUrl');
-    }
-
     public function getSpCertificate(): string {
-        return $this->spCertificate ?? '';
+        return $this->spCertificate;
     }
 
     public function setSpCertificate(?string $spCertificate): void {
-        $this->spCertificate = $spCertificate;
+        $this->spCertificate = $spCertificate ?? '';
         $this->markFieldUpdated('spCertificate');
     }
 
@@ -79,22 +67,12 @@ class ServiceProvider extends Entity implements JsonSerializable {
     }
 
     public function getAttributeMapping(): string {
-        $val = $this->attributeMapping ?? '{}';
-        return $val === '' ? '{}' : $val;
+        return $this->attributeMapping === '' ? '{}' : $this->attributeMapping;
     }
 
     public function setAttributeMapping(?string $attributeMapping): void {
-        $this->attributeMapping = $attributeMapping;
+        $this->attributeMapping = $attributeMapping ?? '{}';
         $this->markFieldUpdated('attributeMapping');
-    }
-
-    public function getSignAssertions(): bool {
-        return $this->signAssertions;
-    }
-
-    public function setSignAssertions(bool $signAssertions): void {
-        $this->signAssertions = $signAssertions;
-        $this->markFieldUpdated('signAssertions');
     }
 
     public function getRequireSignedRequests(): bool {
@@ -121,11 +99,9 @@ class ServiceProvider extends Entity implements JsonSerializable {
             'spEntityId'            => $this->getSpEntityId(),
             'spName'                => $this->getSpName(),
             'acsUrl'                => $this->getAcsUrl(),
-            'sloUrl'                => $this->getSloUrl(),
             'spCertificate'         => $this->getSpCertificate(),
             'nameIdFormat'          => $this->getNameIdFormat(),
             'attributeMapping'      => $this->getAttributeMapping(),
-            'signAssertions'        => $this->getSignAssertions(),
             'requireSignedRequests' => $this->getRequireSignedRequests(),
             'isEnabled'             => $this->getIsEnabled(),
         ];

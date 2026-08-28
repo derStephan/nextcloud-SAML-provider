@@ -5,7 +5,8 @@
          colors="true"
          cacheDirectory="build/phpunit-cache"
          requireCoverageMetadata="true"
-         beStrictAboutCoverageMetadata="true">
+         beStrictAboutCoverageMetadata="true"
+         backupGlobals="true">
     <testsuites>
         <testsuite name="SAML Provider unit tests">
             <directory suffix="Test.php">tests/Unit</directory>

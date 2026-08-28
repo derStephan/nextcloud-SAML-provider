@@ -1,5 +1,5 @@
 {
-  "name": "nextcloud/saml-provider",
+  "name": "derstephan/nextcloud-saml-provider",
   "description": "SAML 2.0 Identity Provider for Nextcloud",
   "type": "nextcloud-app",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "psr/log": "^3.0"
   },
   "require-dev": {
-    "phpunit/phpunit": "^10.5"
+    "phpunit/phpunit": "10.5.0"
   },
   "autoload": {
     "psr-4": {

@@ -90,7 +90,6 @@
             t('saml_provider', 'Many services can import everything automatically from this URL.')));
         section.appendChild(copyField(t('saml_provider', 'SSO URL (= login endpoint)'), state.idp.ssoUrl,
             t('saml_provider', 'Where the service sends users to log in.')));
-        section.appendChild(copyField(t('saml_provider', 'SLO URL (= logout endpoint, optional)'), state.idp.sloUrl));
         root.appendChild(section);
     }
 
@@ -162,7 +161,6 @@
 
         // --- details (full editing) ---
         var acsInput = el('input', { type: 'url', value: sp.acsUrl, style: 'width:100%' });
-        var sloInput = el('input', { type: 'url', value: sp.sloUrl || '', placeholder: t('saml_provider', 'Optional - only if the service offers logout'), style: 'width:100%' });
         var nameIdSel = nameIdSelect(sp.nameIdFormat);
         var mappingArea = el('textarea', { rows: '3', style: 'width:100%;font-family:monospace' });
         mappingArea.value = sp.attributeMapping || '{}';
@@ -180,7 +178,6 @@
             }
             request('POST', '/apps/saml_provider/settings/sp/update', { id: sp.id, fields: {
                 acsUrl: acsInput.value.trim(),
-                sloUrl: sloInput.value.trim(),
                 nameIdFormat: nameIdSel.value,
                 attributeMapping: mapping,
                 spCertificate: certArea.value.trim(),
@@ -197,7 +194,6 @@
                 el('small', { 'class': 'saml-provider-note', text: t('saml_provider',
                     'The address in the service where Nextcloud sends users after login. Find it in the services SAML settings (often ends in /saml/acs).') })]),
 
-            el('p', {}, [el('strong', { text: t('saml_provider', 'Logout URL (optional)') }), el('br'), sloInput]),
 
             el('p', {}, [el('strong', { text: t('saml_provider', 'How the user is identified (NameID)') }), el('br'),
                 nameIdSel, el('br'),
@@ -257,9 +253,9 @@
 
         section.appendChild(el('h4', { text: t('saml_provider', 'Connect a new service') }));
         section.appendChild(el('p', { 'class': 'saml-provider-note', text: t('saml_provider', 'You need two things from the services SAML settings: its "Entity ID" (its unique name) and its "ACS URL" (login callback address). For example Kimai: Entity ID = https://kimai.example.com/auth/saml/metadata, ACS URL = https://kimai.example.com/auth/saml/acs') }));
-        var nameInput = el('input', { type: 'text', placeholder: t('saml_provider', 'Name, e.g. Kimai') });
-        var entityInput = el('input', { type: 'text', placeholder: t('saml_provider', 'Entity ID of the service') });
-        var acsInput = el('input', { type: 'url', placeholder: t('saml_provider', 'ACS URL (https://...)') });
+        var nameInput = el('input', { id: 'saml-provider-new-sp-name', type: 'text', placeholder: t('saml_provider', 'Name, e.g. Kimai') });
+        var entityInput = el('input', { id: 'saml-provider-new-sp-entity-id', type: 'text', placeholder: t('saml_provider', 'Entity ID of the service') });
+        var acsInput = el('input', { id: 'saml-provider-new-sp-acs-url', type: 'url', placeholder: t('saml_provider', 'ACS URL (https://...)') });
         var addBtn = el('button', { 'class': 'button primary', text: t('saml_provider', 'Connect service') });
         addBtn.addEventListener('click', function () {
             request('POST', '/apps/saml_provider/settings/sp', {

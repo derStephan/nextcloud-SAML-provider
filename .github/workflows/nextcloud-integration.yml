@@ -1,69 +1,64 @@
 name: Nextcloud integration tests
-
 on:
   workflow_run:
     workflows: ["Unit tests"]
     types: [completed]
-
 permissions:
   contents: read
-
 jobs:
-  nextcloud-versions:
-    if: github.event.workflow_run.conclusion == 'success'
-    name: Discover Nextcloud releases
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.matrix.outputs.matrix }}
-    steps:
-      - id: matrix
-        name: Build stable and pre-release matrix
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          stable="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$(date -u +%F)" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | select(tonumber >= 33) | {label: ., image: ("nextcloud:" + . + "-apache")} ] | sort_by(.label | tonumber)')"
-
-          # Docker Hub's generic beta tag is historical and unsuitable. Discover the
-          # newest explicit release-candidate or beta Apache tag instead, e.g.
-          # 35.0.0RC1-apache. If no pre-release image is published, test only stable
-          # releases rather than silently using an unrelated legacy image.
-          prerelease="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error 'https://hub.docker.com/v2/repositories/library/nextcloud/tags?ordering=last_updated&page_size=100' | jq --compact-output '[.results[] | select(.name | test("^[0-9]+\\.[0-9]+\\.[0-9]+((RC|rc)[0-9]+|(beta|Beta)[0-9]+)-apache$")) | {label: ("pre-release " + .name), image: ("nextcloud:" + .name)}] | first // empty')"
-
-          if [[ -n "$prerelease" && "$prerelease" != "null" ]]; then
-            matrix="$(jq --compact-output --argjson prerelease "$prerelease" '. + [$prerelease]' <<< "$stable")"
-          else
-            matrix="$stable"
-            echo "No current Nextcloud RC/beta Apache image found; testing stable majors only."
-          fi
-
-          if [[ "$matrix" == "[]" ]]; then echo "No supported Nextcloud versions were returned." >&2; exit 1; fi
-          echo "Testing Nextcloud matrix: $matrix"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
   integration:
-    name: Nextcloud ${{ matrix.target.label }}
-    needs: nextcloud-versions
+    if: github.event.workflow_run.conclusion == 'success'
+    name: Nextcloud ${{ matrix.target.label }} / ${{ matrix.database.label }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON(needs.nextcloud-versions.outputs.matrix) }}
+        # Reviewed, fixed compatibility evidence. Do not derive release targets from
+        # a network API during CI. Extend this list in a pull request after testing.
+        target:
+          - { label: '33', image: 'nextcloud:33-apache' }
+          - { label: '34', image: 'nextcloud:34-apache' }
+        database:
+          - { label: SQLite, driver: sqlite }
+          - { label: MariaDB, driver: mysql }
+          - { label: PostgreSQL, driver: pgsql }
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+      - run: docker network create nextcloud-integration
+      - name: Start MariaDB
+        if: matrix.database.driver == 'mysql'
+        run: docker run -d --name integration-db --network nextcloud-integration -e MARIADB_DATABASE=nextcloud -e MARIADB_USER=nextcloud -e MARIADB_PASSWORD=integration-test-password -e MARIADB_ROOT_PASSWORD=root-password mariadb:11.4
+      - name: Start PostgreSQL
+        if: matrix.database.driver == 'pgsql'
+        run: docker run -d --name integration-db --network nextcloud-integration -e POSTGRES_DB=nextcloud -e POSTGRES_USER=nextcloud -e POSTGRES_PASSWORD=integration-test-password postgres:16-alpine
+      - name: Wait for external database
+        if: matrix.database.driver != 'sqlite'
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if [[ "${{ matrix.database.driver }}" == 'mysql' ]]; then
+              docker exec integration-db mariadb-admin ping -h localhost -unextcloud -pintegration-test-password --silent && exit 0
+            else
+              docker exec integration-db pg_isready -U nextcloud -d nextcloud && exit 0
+            fi
+            sleep 2
+          done
+          docker logs integration-db >&2 || true
+          exit 1
       - name: Start Nextcloud
-        run: docker run --detach --name nextcloud-under-test --publish 8080:80 --volume "$GITHUB_WORKSPACE:/var/www/html/custom_apps/saml_provider:ro" "${{ matrix.target.image }}"
-      - name: Run integration smoke test
+        run: docker run -d --name nextcloud-under-test --network nextcloud-integration --publish 8080:80 --volume "$GITHUB_WORKSPACE:/var/www/html/custom_apps/saml_provider:ro" "${{ matrix.target.image }}"
+      - name: Run installation, migration, and production-mapper contracts
         env:
           NEXTCLOUD_CONTAINER: nextcloud-under-test
           NEXTCLOUD_URL: http://127.0.0.1:8080
           NEXTCLOUD_VERSION: ${{ matrix.target.label }}
+          NEXTCLOUD_DATABASE: ${{ matrix.database.driver }}
         run: bash tests/Integration/smoke.sh
-      - name: Show Nextcloud logs on failure
+      - name: Show logs on failure
         if: failure()
-        run: docker logs nextcloud-under-test
-      - name: Stop Nextcloud
+        run: docker logs nextcloud-under-test || true; docker logs integration-db || true
+      - name: Remove containers
         if: always()
-        run: docker rm --force nextcloud-under-test || true
+        run: docker rm -f nextcloud-under-test integration-db 2>/dev/null || true; docker network rm nextcloud-integration 2>/dev/null || true

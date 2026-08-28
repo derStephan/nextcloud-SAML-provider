@@ -1,0 +1,7 @@
+/build/
+/vendor/
+/release-version.txt
+/signing.key
+/signing.crt
+/.secrets/
+/.npm/

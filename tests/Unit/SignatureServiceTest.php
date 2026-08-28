@@ -13,14 +13,19 @@ final class SignatureServiceTest extends TestCase {
         [$certificate, $privateKey] = $this->newCertificate(); $sp = $this->provider($certificate);
         $request = rawurlencode(base64_encode('request')); $relay = rawurlencode('https://sp.example.test/after'); $algorithm = rawurlencode('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'); $signed = "SAMLRequest={$request}&RelayState={$relay}&SigAlg={$algorithm}";
         openssl_sign($signed, $signature, $privateKey, OPENSSL_ALGO_SHA256); $rawQuery = $signed . '&Signature=' . rawurlencode(base64_encode($signature));
-        $params = ['SAMLRequest' => base64_decode(rawurldecode($request)), 'RelayState' => rawurldecode($relay), 'SigAlg' => rawurldecode($algorithm), 'Signature' => base64_encode($signature)]; $service = new SignatureService();
-        self::assertTrue($service->spCanSign($sp)); self::assertTrue($service->verifyRedirectSignature($params, $sp, $rawQuery)); $params['Signature'] = base64_encode('invalid'); self::assertFalse($service->verifyRedirectSignature($params, $sp, $rawQuery));
+        $params = ['SAMLRequest' => rawurldecode($request), 'RelayState' => rawurldecode($relay), 'SigAlg' => rawurldecode($algorithm), 'Signature' => base64_encode($signature)]; $service = new SignatureService();
+        self::assertTrue($service->spCanSign($sp)); self::assertTrue($service->verifyRedirectSignature($params, $sp, $rawQuery));
+        $wrongDecodedParams = $params; $wrongDecodedParams['SAMLRequest'] = 'request';
+        self::assertFalse($service->verifyRedirectSignature($wrongDecodedParams, $sp, $rawQuery));
+        self::assertFalse($service->verifyRedirectSignature($params, $sp, $rawQuery . '&SAMLRequest=attacker-controlled'));
+        $params['Signature'] = base64_encode('invalid'); self::assertFalse($service->verifyRedirectSignature($params, $sp, $rawQuery));
     }
     public function testVerifiesValidSignedPostRequestAndRejectsDigestTampering(): void {
         [$certificate, $privateKey] = $this->newCertificate(); $sp = $this->provider($certificate); $service = new SignatureService();
         $xml = $this->signedAuthnRequest('_post-request', $privateKey);
         self::assertTrue($service->verifyPostSignature($xml, $sp));
         self::assertFalse($service->verifyPostSignature(str_replace('https://sp.example.test/acs', 'https://evil.example.test/acs', $xml), $sp));
+        self::assertFalse($service->verifyPostSignature(str_replace('http://www.w3.org/2001/10/xml-exc-c14n#', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315', $xml), $sp));
         $wrapped = str_replace('</samlp:AuthnRequest>', '<samlp:AuthnRequest ID="_post-request"/></samlp:AuthnRequest>', $xml);
         self::assertFalse($service->verifyPostSignature($wrapped, $sp));
     }

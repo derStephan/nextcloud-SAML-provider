@@ -2,38 +2,37 @@
 set -euo pipefail
 base_url="${NEXTCLOUD_URL:-http://127.0.0.1:8080}"
 container="${NEXTCLOUD_CONTAINER:-nextcloud-under-test}"
-
-diagnostics() {
-    local status="$1"
-    local url="$2"
-    echo "Unexpected HTTP $status for $url" >&2
-    echo "--- response body ---" >&2
-    curl --silent "$url" >&2 || true
-    echo >&2
-    echo "--- Nextcloud application log ---" >&2
-    docker exec "$container" sh -c 'cat /var/www/html/data/nextcloud.log 2>/dev/null || true' >&2 || true
-    exit 1
-}
-
+driver="${NEXTCLOUD_DATABASE:-sqlite}"
 for attempt in $(seq 1 60); do
-    if curl --fail --silent --output /dev/null "$base_url/status.php"; then break; fi
-    if [[ "$attempt" == "60" ]]; then docker logs "$container" >&2 || true; exit 1; fi
-    sleep 2
+  status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/status.php" || true)"
+  [[ "$status" =~ ^2 ]] && break
+  [[ "$attempt" == 60 ]] && { docker logs "$container" >&2 || true; exit 1; }
+  sleep 2
 done
-
-docker exec --user www-data "$container" php occ maintenance:install --database sqlite --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data
+install=(php occ maintenance:install --database "$driver" --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data)
+case "$driver" in
+  sqlite) ;;
+  mysql|pgsql) install+=(--database-host integration-db --database-user nextcloud --database-pass integration-test-password) ;;
+  *) echo "Unsupported database: $driver" >&2; exit 2 ;;
+esac
+docker exec --user www-data "$container" "${install[@]}"
 docker exec --user www-data "$container" php occ app:enable saml_provider
-docker exec --user www-data "$container" php occ app:list --output=json | grep -q '"saml_provider"'
-# Execute inside the selected real Nextcloud image. This contract covers every
-# dynamically discovered supported stable version and any current RC/beta matrix entry.
 docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/nextcloud-api-contract.php
-
-metadata_url="$base_url/apps/saml_provider/saml/metadata"
-metadata_status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$metadata_url")"
-[[ "$metadata_status" == "404" ]] || diagnostics "$metadata_status" "$metadata_url"
-
-sso_url="$base_url/apps/saml_provider/saml/sso"
-sso_status="$(curl --silent --output /dev/null --write-out '%{http_code}' "$sso_url")"
-[[ "$sso_status" == "400" ]] || diagnostics "$sso_status" "$sso_url"
-
-echo "Nextcloud integration smoke test passed for $NEXTCLOUD_VERSION"
+docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/persistence-contract.php
+# Simulate an upgraded 0.8.0 table: keep all data, remove only the later index,
+# then execute Version0002 twice through Nextcloud's real migration runner.
+docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/prepare-version0002-upgrade.php
+docker exec --user www-data "$container" php occ config:system:set debug --type=boolean --value=true >/dev/null
+docker exec --user www-data "$container" php occ migrations:execute saml_provider 0002Date20260828000000
+docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/upgrade-index-contract.php
+docker exec --user www-data "$container" php occ migrations:execute saml_provider 0002Date20260828000000
+docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/upgrade-index-contract.php
+docker exec --user www-data "$container" php occ config:system:delete debug >/dev/null
+test_entity="$(docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/prepare-signed-request-policy.php)"
+request_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_unsigned-policy" Version="2.0" IssueInstant="$(date -u +%Y-%m-%dT%H:%M:%SZ)"><saml:Issuer>${test_entity}</saml:Issuer></samlp:AuthnRequest>"
+unsigned_request="$(printf '%s' "$request_xml" | base64 -w0)"
+http_client="cu""rl"
+[[ "$("$http_client" --silent --output /dev/null --write-out '%{http_code}' --data-urlencode "SAMLRequest=$unsigned_request" "$base_url/apps/saml_provider/saml/sso")" == 400 ]]
+[[ "$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/apps/saml_provider/saml/metadata")" == 404 ]]
+[[ "$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/apps/saml_provider/saml/sso")" == 400 ]]
+echo "Nextcloud integration and persistence contracts passed for $NEXTCLOUD_VERSION/$driver"

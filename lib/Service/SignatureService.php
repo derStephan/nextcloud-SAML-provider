@@ -41,19 +41,36 @@ class SignatureService {
             return false;
         }
 
-        // Extract raw key-value pairs directly from query string
+        // Extract the raw signed values once. Reject duplicate signed parameters:
+        // PHP's query decoding has last-value-wins behaviour, which is unsuitable
+        // when the signature and the parsed request could otherwise select different values.
         $pairs = explode('&', $rawQuery);
         $rawParams = [];
         foreach ($pairs as $pair) {
             $parts = explode('=', $pair, 2);
-            if (count($parts) === 2) {
-                $rawParams[$parts[0]] = $parts[1];
+            if (count($parts) !== 2 || !in_array($parts[0], ['SAMLRequest', 'RelayState', 'SigAlg', 'Signature'], true)) {
+                continue;
             }
+            if (array_key_exists($parts[0], $rawParams)) {
+                return false;
+            }
+            $rawParams[$parts[0]] = $parts[1];
         }
 
         $rawRequest = $rawParams['SAMLRequest'] ?? null;
         $rawSigAlg = $rawParams['SigAlg'] ?? null;
-        if ($rawRequest === null || $rawSigAlg === null) {
+        $rawSignature = $rawParams['Signature'] ?? null;
+        if ($rawRequest === null || $rawSigAlg === null || $rawSignature === null) {
+            return false;
+        }
+        // Bind framework-decoded values to the exact raw values that are signed.
+        // urldecode deliberately mirrors application/x-www-form-urlencoded decoding,
+        // including '+' handling, used by PHP for IRequest query parameters.
+        if (urldecode($rawRequest) !== $samlRequest
+            || urldecode($rawSigAlg) !== $sigAlg
+            || urldecode($rawSignature) !== $signatureB64
+            || (isset($rawParams['RelayState']) && urldecode($rawParams['RelayState']) !== ($params['RelayState'] ?? null))
+            || (!isset($rawParams['RelayState']) && isset($params['RelayState']))) {
             return false;
         }
 
@@ -81,11 +98,19 @@ class SignatureService {
      * Hardened against XML Signature Wrapping (XSW) and XXE.
      */
     public function verifyPostSignature(string $xml, ServiceProvider $sp): bool {
+        // XML signatures are public input. Keep parser errors out of server logs,
+        // prohibit DTDs explicitly, and never resolve network resources.
+        if (preg_match('/<!DOCTYPE\b/i', $xml) === 1) {
+            return false;
+        }
         $doc = new \DOMDocument();
-        // Never substitute entities or load DTDs. This rejects external entities and
-        // avoids entity-expansion attacks without deprecated global libxml toggles.
-        $loadStatus = $doc->loadXML($xml, LIBXML_NONET | LIBXML_NOCDATA);
-
+        $previousLibxmlErrors = libxml_use_internal_errors(true);
+        try {
+            $loadStatus = $doc->loadXML($xml, LIBXML_NONET | LIBXML_NOCDATA);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previousLibxmlErrors);
+        }
         if (!$loadStatus) {
             return false;
         }
@@ -104,9 +129,15 @@ class SignatureService {
             return false;
         }
 
-        // Ensure there is exactly one element with the specified ID in the entire document
-        $idNodes = $xpath->query("//*[@ID='" . htmlspecialchars($rootId, ENT_QUOTES) . "']");
-        if ($idNodes === false || $idNodes->length !== 1) {
+        // Do not interpolate an attacker-controlled value into XPath. Count IDs
+        // directly so quote characters cannot alter query semantics.
+        $matchingIds = 0;
+        foreach ($doc->getElementsByTagName('*') as $element) {
+            if ($element instanceof \DOMElement && $element->getAttribute('ID') === $rootId) {
+                ++$matchingIds;
+            }
+        }
+        if ($matchingIds !== 1) {
             return false;
         }
 
@@ -117,6 +148,18 @@ class SignatureService {
         /** @var \DOMElement $sigNode */
         $sigNode = $sigNodes->item(0);
 
+        $canonicalization = $xpath->evaluate('string(ds:SignedInfo/ds:CanonicalizationMethod/@Algorithm)', $sigNode);
+        if ($canonicalization !== 'http://www.w3.org/2001/10/xml-exc-c14n#') {
+            return false;
+        }
+        $transforms = $xpath->query('ds:SignedInfo/ds:Reference/ds:Transforms/ds:Transform', $sigNode);
+        if ($transforms === false || $transforms->length !== 2
+            || !$transforms->item(0) instanceof \DOMElement
+            || !$transforms->item(1) instanceof \DOMElement
+            || $transforms->item(0)->getAttribute('Algorithm') !== 'http://www.w3.org/2000/09/xmldsig#enveloped-signature'
+            || $transforms->item(1)->getAttribute('Algorithm') !== 'http://www.w3.org/2001/10/xml-exc-c14n#') {
+            return false;
+        }
         $sigAlg = $xpath->evaluate('string(ds:SignedInfo/ds:SignatureMethod/@Algorithm)', $sigNode);
         if (!isset(self::SIGALG_MAP[$sigAlg])) {
             return false;

@@ -59,26 +59,10 @@ try {
     await snapshot('invalid-nextcloud-login-rejected');
     console.log('Invalid Nextcloud login was rejected without a Kimai ACS request.');
   } else {
-    const samlPostForm = page.locator('#saml-provider-post-form');
-    const firstOutcome = await Promise.race([
-      page.waitForURL(kimaiAuthenticated, { timeout: 15_000 }).then(() => 'kimai'),
-      samlPostForm.waitFor({ state: 'visible', timeout: 15_000 }).then(() => 'form'),
-    ]);
-    if (firstOutcome === 'form') {
-      note('nextcloud-saml-post-form-visible', { url: page.url() });
-      await page.waitForTimeout(750);
-      if (!kimaiAuthenticated(new URL(page.url()))) {
-        await snapshot('nextcloud-saml-post-ready');
-        const continueButton = samlPostForm.locator('button[type="submit"], input[type="submit"]').first();
-        if (await continueButton.isVisible()) {
-          note('nextcloud-saml-post-fallback-click', { url: page.url() });
-          await continueButton.click();
-        }
-      }
-    } else {
-      note('nextcloud-saml-auto-submit-completed', { url: page.url() });
-    }
-    if (!kimaiAuthenticated(new URL(page.url()))) await page.waitForURL(kimaiAuthenticated, { timeout: 45_000 });
+    // Positive SSO must auto-submit. Do not click the fallback button here:
+    // if the form remains visible, CSP, nonce, or JavaScript execution regressed.
+    await page.waitForURL(kimaiAuthenticated, { timeout: 45_000 });
+    note('nextcloud-saml-auto-submit-completed', { url: page.url() });
     if (acsStatus === null || acsStatus < 300 || acsStatus >= 400) throw new Error(`Kimai did not accept the browser SAML POST with a redirect (ACS status: ${acsStatus ?? 'not observed'}).`);
     note('kimai-browser-acs-accepted', { acsStatus, authenticatedUrl: page.url() });
     await snapshot('kimai-authenticated');

@@ -13,6 +13,12 @@ $TRANSLATIONS = [
     "SP certificate is not a valid X.509 PEM certificate" => "SP certificate is not a valid X.509 PEM certificate",
     "Requiring signed requests needs the SP certificate" => "Requiring signed requests needs the SP certificate",
     "A service provider with this Entity ID already exists" => "A service provider with this Entity ID already exists",
-    "Not found" => "Not found"
+    "Continue to {service}" => "Continue to {service}",
+    "You are about to sign in to this connected service with your Nextcloud account." => "You are about to sign in to this connected service with your Nextcloud account.",
+    "Not found" => "Not found",
+    "SLO URL must be a valid http:// or https:// URL" => "SLO URL must be a valid http:// or https:// URL",
+    "Attribute mapping must be a JSON object" => "Attribute mapping must be a JSON object",
+    "Attribute mapping values must be uid, displayName, or mail" => "Attribute mapping values must be uid, displayName, or mail",
+    "Service provider not found" => "Service provider not found",
 ];
 $PLURAL_FORMS = "nplurals=2; plural=(n != 1);";

@@ -25,8 +25,26 @@ class UrlGenerator implements IURLGenerator {
 final class User implements IUser { public function __construct(private string $uid = 'alice', private ?string $mail = 'alice@example.test', private string $name = 'Alice Example') {} public function getUID(): string { return $this->uid; } public function getEMailAddress(): ?string { return $this->mail; } public function getDisplayName(): string { return $this->name; } }
 final class NullLogger implements LoggerInterface { public function emergency(\Stringable|string $message, array $context = []): void {} public function alert(\Stringable|string $message, array $context = []): void {} public function critical(\Stringable|string $message, array $context = []): void {} public function error(\Stringable|string $message, array $context = []): void {} public function warning(\Stringable|string $message, array $context = []): void {} public function notice(\Stringable|string $message, array $context = []): void {} public function info(\Stringable|string $message, array $context = []): void {} public function debug(\Stringable|string $message, array $context = []): void {} public function log($level, \Stringable|string $message, array $context = []): void {} }
 namespace OCA\SAMLProvider\Tests\Support;
-final class Request implements \OCP\IRequest { public function __construct(public array $params=[], public string $method='GET'){} public function getParam(string $key): mixed{return $this->params[$key]??null;} public function getParams():array{return $this->params;} public function getMethod():string{return $this->method;} }
+final class Request implements \OCP\IRequest { public function __construct(public array $params=[], public string $method='GET', public array $serverParams=[]){} public function getParam(string $key): mixed{return $this->params[$key]??null;} public function getParams():array{return $this->params;} public function getMethod():string{return $this->method;} public function getServerParam(string $key,mixed $default=null):mixed{return $this->serverParams[$key]??$default;} }
 final class Session implements \OCP\IUserSession { public bool $loggedIn=false; public bool $loggedOut=false; public function __construct(public ?\OCP\IUser $user=null){} public function isLoggedIn():bool{return $this->loggedIn;} public function getUser():?\OCP\IUser{return $this->user;} public function logout():void{$this->loggedOut=true;$this->loggedIn=false;} }
 final class L10N implements \OCP\IL10N { public function t(string $text,array $parameters=[]):string{return $text;} }
 final class InitialState implements \OCP\AppFramework\Services\IInitialState { public array $values=[]; public function provideInitialState(string $key,mixed $value):void{$this->values[$key]=$value;} }
 final class RouteUrlGenerator extends UrlGenerator { public function linkToRouteAbsolute(string $route,array $params=[]):string{return 'https://cloud.example.test/'.$route.(isset($params['spId'])?'/'.$params['spId']:'');} public function linkTo(string $app,string $file):string{return '/apps/'.$app.'/'.$file;} public function getBaseUrl():string{return '/';} }
+
+final class TestServiceProviderMapper extends \OCA\SAMLProvider\Db\ServiceProviderMapper {
+    public ?\OCA\SAMLProvider\Db\ServiceProvider $byEntityId = null;
+    public ?\OCA\SAMLProvider\Db\ServiceProvider $byId = null;
+    public bool $requiresSignedRequests = false;
+    /** @var list<\OCA\SAMLProvider\Db\ServiceProvider> */ public array $enabled = [];
+    /** @var list<\OCA\SAMLProvider\Db\ServiceProvider> */ public array $rows = [];
+    public bool $failUpdate = false;
+    public function __construct() {}
+    public function findByEntityId(string $entityId): \OCA\SAMLProvider\Db\ServiceProvider { if ($this->byEntityId === null) throw new \OCP\AppFramework\Db\DoesNotExistException('Not found'); return $this->byEntityId; }
+    public function find(int $id): \OCA\SAMLProvider\Db\ServiceProvider { if ($this->byId === null) throw new \OCP\AppFramework\Db\DoesNotExistException('Not found'); return $this->byId; }
+    public function findAll(): array { return $this->rows; }
+    public function findAllEnabled(): array { return $this->enabled; }
+    public function insert(\OCP\AppFramework\Db\Entity $sp): \OCP\AppFramework\Db\Entity { $sp->setId(count($this->rows) + 1); $this->rows[] = $sp; $this->byEntityId = $sp; $this->byId = $sp; return $sp; }
+    public function update(\OCP\AppFramework\Db\Entity $sp): \OCP\AppFramework\Db\Entity { if ($this->failUpdate) throw new \RuntimeException('simulated database failure'); $this->byId = $sp; return $sp; }
+    public function delete(\OCP\AppFramework\Db\Entity $sp): void { $this->byId = null; }
+    public function anyRequiresSignedRequests(): bool { return $this->requiresSignedRequests; }
+}

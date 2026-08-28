@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <!-- NEXTCLOUD_COMPATIBILITY:START -->
-**Tested Nextcloud compatibility:** 33 through 34
+**Tested Nextcloud compatibility:** 33 or later
 <!-- NEXTCLOUD_COMPATIBILITY:END -->
 
 Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External applications acting as Service Providers (SPs) can authenticate users against their Nextcloud accounts using SAML single sign-on (SSO).
@@ -20,9 +20,15 @@ Turn Nextcloud into a **SAML 2.0 Identity Provider (IdP)**. External application
 - IdP-initiated SSO from the app launcher
 - Signed SAML Responses and Assertions using RSA-SHA256 and enveloped XMLDSig
 - IdP metadata endpoint
-- Per-service configuration: Entity ID, ACS URL, optional SLO URL, NameID format, attributes, and SP certificate
+- Per-service configuration: Entity ID, ACS URL, optional , NameID format, attributes, and SP certificate
 - Optional validation of signed AuthnRequests for each service
 - Nextcloud administration interface and user-facing launcher
+
+## Security and operational limits
+
+- HTTP-Redirect AuthnRequests are limited to 1 MiB after Base64 decoding and DEFLATE expansion.
+- AuthnRequest IssueInstant values must be within five minutes of the IdP clock; synchronize IdP and Service Provider clocks with NTP or Chrony.
+- Redirect-binding signatures are verified over the raw query string obtained through Nextcloud’s request abstraction; reverse proxies must preserve the original query string.
 
 ## Development transparency
 
@@ -30,7 +36,7 @@ This project was developed with assistance from **GPT 5.6 Terra by OpenAI**, inc
 
 ## Translations
 
-The app includes English and German plus AI-assisted draft catalogues for 18 additional widely spoken languages: Arabic, Bengali, Chinese (Simplified), Spanish, French, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese (Brazil), Russian, Thai, Turkish, Ukrainian, Urdu, and Vietnamese. Please review translations in your native language before relying on them in production, especially security-related wording. English remains the fallback for strings awaiting community review.
+The app includes English and German plus structurally synchronized draft catalogues for 18 additional widely spoken languages: Arabic, Bengali, Chinese (Simplified), Spanish, French, Hindi, Indonesian, Italian, Japanese, Korean, Polish, Portuguese (Brazil), Russian, Thai, Turkish, Ukrainian, Urdu, and Vietnamese. Please review translations in your native language before relying on them in production, especially security-related wording. English remains the fallback for strings awaiting community review.
 
 All browser (`.json`/`.js`) and server-rendered (`.php`) locale catalogs are checked in CI against the English source key sets. The check prevents a UI change from shipping with a missing, stale, or mismatched message key; it does not claim linguistic review of AI-assisted draft wording.
 
@@ -74,7 +80,6 @@ Replace `cloud.example.com` with the public hostname of the Nextcloud instance.
 | --- | --- |
 | Metadata | `https://cloud.example.com/apps/saml_provider/saml/metadata` |
 | SSO endpoint | `https://cloud.example.com/apps/saml_provider/saml/sso` |
-| SLO endpoint | `https://cloud.example.com/apps/saml_provider/saml/slo` |
 | IdP-initiated login | `https://cloud.example.com/apps/saml_provider/saml/login/{service-provider-id}` |
 | User launcher | `https://cloud.example.com/apps/saml_provider/` |
 
@@ -89,7 +94,6 @@ Each connected service needs the following values:
 | **Name** | A human-readable name shown to administrators and users. |
 | **Entity ID** | The Service Provider's unique SAML identifier. |
 | **ACS URL** | The Assertion Consumer Service endpoint that receives the SAML Response. |
-| **Logout URL** | Optional. Enter it only when the service provides an SLO endpoint. |
 | **NameID format** | How the user is identified. Email address is suitable for most services. |
 | **Attribute mapping** | Optional JSON mapping for additional attributes. |
 | **Service Provider certificate** | Required only when the service signs AuthnRequests. |
@@ -142,9 +146,6 @@ kimai:
                 entityId: 'https://cloud.example.com/apps/saml_provider/saml/metadata'
                 singleSignOnService:
                     url: 'https://cloud.example.com/apps/saml_provider/saml/sso'
-                    binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
-                singleLogoutService:
-                    url: 'https://cloud.example.com/apps/saml_provider/saml/slo'
                     binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
                 x509cert: 'PASTE_NEXTCLOUD_CERTIFICATE_AS_ONE_BASE64_LINE_HERE'
             sp:
@@ -208,11 +209,11 @@ For Kimai-specific configuration and behavior, see the official [Kimai SAML docu
 ## SAML security limitations
 
 - This IdP does not keep a server-side replay cache for issued assertions. Service Providers should validate `InResponseTo`, assertion IDs, timestamps, audience, recipient, and XML signatures, and reject replayed responses.
-- SP-initiated Single Logout is not implemented as a validated SAML LogoutRequest flow.
+- Single Logout is not exposed. It will be added only with a validated SAML LogoutRequest/LogoutResponse flow.
 
 ## Quality assurance and release process
 
-This project uses a layered test approach. Unit tests validate application behavior in isolation; local test doubles are intentionally only behavioral fixtures, not the authority for Nextcloud API compatibility. The dynamically discovered real Nextcloud integration matrix validates installation, framework contracts, and API compatibility. The Kimai test validates a complete SAML SSO exchange with a real external Service Provider. A later stage is never started after a failed earlier stage.
+This project uses a layered test approach. Unit tests validate application behavior in isolation; explicitly named local mapper doubles are only controller fixtures. Production `ServiceProviderMapper` persistence is validated separately through the real DBAL-backed integration contract, not through those doubles. The reviewed, repository-controlled Nextcloud integration matrix validates installation, framework contracts, database portability, and API compatibility. The Kimai test validates a complete SAML SSO exchange with a real external Service Provider. A later stage is never started after a failed earlier stage.
 
 ### Coverage policy
 
@@ -220,83 +221,30 @@ PHPUnit calculates line coverage across the complete `lib/` directory. The manda
 
 Coverage is a useful safety signal, not proof of correctness. In particular, meaningful SAML security checks, input validation, XML parsing, signature verification, controller authorization, and failure paths are tested with assertions in addition to being executed.
 
-### Fail-closed pipeline
+### Controlled CI and release process
 
-GitHub Actions runs the following dependency chain:
+GitHub Actions uses this validation chain:
 
 ```text
 Unit tests
     -> Nextcloud integration tests
         -> Kimai SAML interoperability test
-            -> Release app (main only)
 ```
 
-Each downstream workflow is triggered through `workflow_run` only when its direct predecessor concluded successfully. It checks out the exact predecessor commit (`head_sha`) rather than an arbitrary newer branch state. Therefore:
+Each downstream workflow starts only when its direct predecessor succeeds and checks out that predecessor’s exact commit SHA. The reviewed CI matrix is deliberately fixed in the repository: PHP 8.1–8.3 and Nextcloud 33/34, with SQLite, MariaDB, and PostgreSQL for integration contracts. Changing the supported matrix requires a reviewed pull request; an external lifecycle or Docker Hub API cannot silently change release evidence.
 
-- a failed unit-test run blocks integration tests, Kimai, and release;
-- a failed Nextcloud integration run blocks Kimai and release;
-- a failed Kimai run blocks release; and
-- a release run first confirms that the tested commit is still the current `main` commit, avoiding a release of a superseded revision.
+The **Release app** workflow is intentionally separate from CI. It has no `push` or `workflow_run` trigger: a maintainer starts it manually from `main`, supplies the exact semantic version, proven Nextcloud range, and specific user-visible release notes, and passes the protected `release` environment approval gate. The release workflow then updates only the selected metadata, creates an annotated tag, signs a runtime-only App Store archive, verifies that archive, and creates the GitHub release.
 
-Unit tests run on the currently supported PHP versions discovered from the lifecycle API. Before PHPUnit starts, CI verifies the complete browser and server-side localization catalogs and checks the unit-test suite itself for a minimum number of test methods and assertion sites, empty test files, and explicit coverage mapping for the production surface. It then installs the Composer dependencies, runs PHPUnit, generates Clover coverage, enforces the 80% full-`lib/` gate, and uploads the report to Codecov. A Codecov upload issue does not turn a successful test suite into a failed build. Framework compatibility is deliberately not inferred from unit-test doubles; it is enforced by the real-container API contract stage described below.
+The runtime archive is built from an explicit allowlist (`appinfo`, `css`, `img`, `js`, `l10n`, `lib`, `templates`, and `LICENSE`). Source-only material—CI definitions, tests, documentation, build output, development dependencies, and signing files—is rejected before and after signing. `appinfo/signature.json` is expected only in the disposable post-signing staging directory, never in the source repository.
 
-### Nextcloud integration tests
+### Persistent NameID privacy
 
-After the unit-test workflow succeeds, the integration workflow discovers supported stable Nextcloud major releases (33 and later) and, when an explicit current Docker RC or beta Apache image exists, adds that pre-release image to the matrix. Each matrix job first runs the **Public API Preflight**: it rejects private Nextcloud implementation references such as `OC::$server`, `OC::`, `lib/private`, and the legacy CSP nonce locator in both production and test code. The failure output names the file, line, and expected replacement direction; no browser test is started after such a finding.
+Persistent NameIDs are derived with HMAC-SHA256 from the Nextcloud user ID, the service-provider entity ID, and an installation-specific random secret stored as sensitive app configuration. They are stable for a given user and service provider but cannot be reconstructed from a known UID namespace without that secret.
 
-The job then starts the selected official Nextcloud Apache image, mounts the app read-only, installs an ephemeral SQLite-backed instance, enables the app, and runs `tests/Integration/nextcloud-api-contract.php` **inside that exact image**. The contract verifies every public `OCP` type, method, constant, base class, response class, migration type, and attribute used by production code. A missing public contract is reported as an upstream compatibility finding, before endpoint checks or Kimai start. Finally, the smoke test verifies that metadata is unavailable without IdP material (`404`) and that SSO without an AuthnRequest is rejected (`400`). Container and application logs are shown on failure.
+### Dependency and image provenance
 
-### Kimai SAML browser end-to-end test
+CI uses versioned action, container, npm, Composer, and Playwright references. The direct PHPUnit development dependency is fixed to version `10.5.0`; a reviewed `composer.lock` must still be generated in a Composer-capable environment before dependency resolution is fully reproducible. The browser E2E bootstrap still downloads the npm CLI and Playwright dependency graph during the run. It verifies downloaded bytes against registry-provided integrity metadata, which is useful transport integrity but is not an independently pinned supply-chain attestation. Likewise, Docker image tags are versioned but not digest-pinned. These are explicit residual supply-chain limitations, not release guarantees. Production archives contain no Composer or npm dependencies.
 
-After every Nextcloud integration matrix job succeeds, the Kimai workflow independently tests the same stable and available RC/beta Nextcloud image matrix. For each matrix entry it creates a private Docker network with the selected Nextcloud IdP, `mariadb:11.4`, Kimai, and headless Chromium.
-
-The job runs these layers in order:
-
-1. **Public API Preflight** — the same private-API guard runs before containers are provisioned.
-2. **Nextcloud public API contract** — runs inside the selected Nextcloud image before SAML configuration.
-3. **Kimai public SAML HTTP preflight** — Kimai must expose valid SAML metadata containing its expected ACS URL, and its public SAML login endpoint must redirect to the configured Nextcloud IdP.
-4. **Negative browser SSO** — wrong Nextcloud credentials must remain on the IdP login page and must not reach Kimai's ACS.
-5. **Positive browser SSO** — a real browser starts at Kimai, authenticates at Nextcloud, returns via the signed SAML POST, and must reach an authenticated Kimai page after an accepted ACS redirect.
-6. **Populated admin-page capture** — a fresh authenticated browser opens the public Nextcloud admin settings route and requires both IdP settings and the registered `Kimai E2E` Service Provider to be visible. It writes `docs/admin-settings-e2e-nc<target>.png` (for example, `docs/admin-settings-e2e-nc34.png`) from this populated page and adds it to the diagnostic artifact.
-
-The E2E tests do not parse or replay Nextcloud HTML, CSRF tokens, generated form actions, SAML values, internal Nextcloud APIs, or Kimai database tables. They use normal browser controls and public HTTP endpoints, then assert user-visible outcomes. Failed runs preserve screenshots, browser traces, HTTP metadata, and container logs. Successful runs upload each populated admin screenshot as a versioned E2E artifact for the release stage.
-
-Diagnostics are named with the app version, Nextcloud matrix target, GitHub run ID, and retry attempt, for example `kimai-saml-browser-v0.7.26-nc34-run123456789-attempt1.zip`.
-
-### Releases and App Store publication
-
-The **Release app** workflow runs only after the green Kimai workflow for the current `main` commit and only inside the protected `release` environment. It is fail-closed: if a required screenshot, signing credential, App Store credential, or validation step is missing, the release fails instead of publishing a partial GitHub-only release.
-
-The workflow performs these steps:
-
-1. confirms that the tested SHA is still the current `main` tip;
-2. derives the tested stable Nextcloud compatibility range and skips scheduled releases when that range is unchanged;
-3. imports the populated admin-page screenshots from the **exact successful Kimai E2E workflow run**, requiring one valid PNG per successful stable matrix job;
-4. updates `appinfo/info.xml`, the changelog, README compatibility marker, and App Store screenshot URLs; then commits those release metadata changes and creates an annotated tag;
-5. stages a **runtime-only** `saml_provider/` directory containing only `appinfo/`, `lib/`, `templates/`, `js/`, `css/`, `img/`, `l10n/`, and `LICENSE`;
-6. signs that staging directory using `occ integrity:sign-app`, requiring the generated `appinfo/signature.json`, and validates the allowlist again immediately before archiving;
-7. publishes that signed archive as the GitHub Release asset; and
-8. registers that exact public GitHub Release asset with the Nextcloud App Store API.
-
-The installed App Store archive deliberately excludes `.github/`, `tests/`, `docs/`, `scripts/`, `build/`, `.git/`, Composer and PHPUnit development metadata, and repository documentation such as this README and the changelog. These files remain in the source repository but are not installed on Nextcloud servers.
-
-### Required protected release configuration
-
-The protected `release` environment must contain:
-
-| Configuration | Purpose |
-| --- | --- |
-| `NEXTCLOUD_SIGNING_PRIVATE_KEY` | Signs the staged app through Nextcloud's integrity-signing command and authenticates the App Store submission. |
-| `NEXTCLOUD_SIGNING_CERTIFICATE` | Public certificate used while creating `appinfo/signature.json`. |
-| `NEXTCLOUD_APPSTORE_TOKEN` | API token from the maintainer's Nextcloud App Store account, used to register the published archive. |
-
-There is no separate opt-in switch for App Store publication: a successful release is intended to reach both GitHub Releases and the Nextcloud App Store. Missing protected credentials cause a failure rather than an incomplete release.
-
-### Release-loop protection
-
-The release workflow commits updated metadata and screenshots back to `main`. That push starts normal CI again, but the release commit contains the marker `[skip automated release]`. The release job explicitly refuses workflow chains whose triggering commit contains that marker. Therefore the bot-generated commit can be tested, but cannot generate a second release.
-
-The App Store listing is generated from `appinfo/info.xml`, including the summary, description, license, supported Nextcloud versions, repository URL, issue tracker URL, author, and public screenshot URLs. The release workflow writes current validated E2E screenshot URLs into that metadata; an image merely existing in `docs/` is not displayed until it is referenced there.
 
 ## Security notes
 

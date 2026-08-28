@@ -41,74 +41,11 @@ echo "NEXTCLOUD PUBLIC API PREFLIGHT: target ${NEXTCLOUD_IMAGE:-nextcloud:34-apa
 echo 'This checks only documented OCP interfaces used by the application.'
 echo '================================================================='
 docker exec --user www-data "$nextcloud" env NEXTCLOUD_VERSION="${E2E_TARGET_SLUG:-unknown}" php /var/www/html/custom_apps/saml_provider/tests/Integration/nextcloud-api-contract.php
-# Kimai requires an Email assertion attribute; all values are ephemeral test data.
-docker exec --user www-data "$nextcloud" php occ user:setting admin settings email admin@example.test >/dev/null
-docker exec --user www-data "$nextcloud" php -r '
-$db = new PDO("sqlite:/var/www/html/data/nextcloud.db");
-$name = $db->query("SELECT name FROM sqlite_master WHERE type=\"table\" AND name=\"oc_saml_provider_sp\"")->fetchColumn();
-if ($name !== "oc_saml_provider_sp") { fwrite(STDERR, "missing migration table\n"); exit(1); }
-$stmt = $db->prepare("INSERT INTO oc_saml_provider_sp (sp_entity_id, sp_name, acs_url, slo_url, sp_certificate, name_id_format, attribute_mapping, sign_assertions, require_signed_requests, is_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-$stmt->execute(["http://e2e-kimai:8001/auth/saml/metadata", "Kimai E2E", "http://e2e-kimai:8001/auth/saml/acs", "", "", "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress", "{\"Email\":\"mail\",\"FirstName\":\"displayName\"}", 1, 0, 1]);
-' || fail 'saml_provider_sp migration table is unavailable or cannot register Kimai'
-# Test-only self-signed IdP material. It exists only inside this ephemeral Docker container.
-docker exec --user www-data "$nextcloud" sh -ec 'openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/idp.key -out /tmp/idp.crt -subj "/CN=e2e-nextcloud" -days 1 >/dev/null 2>&1; php occ config:app:set saml_provider idp_certificate --value="$(cat /tmp/idp.crt)"; php occ config:app:set saml_provider idp_private_key --value="$(cat /tmp/idp.key)"'
-idp_cert="$(docker exec --user www-data "$nextcloud" php occ config:app:get saml_provider idp_certificate | awk 'BEGIN{ORS=""} !/BEGIN CERTIFICATE|END CERTIFICATE/{gsub(/[[:space:]]/,"");print}')"
-[[ -n "$idp_cert" ]] || fail 'IdP certificate was not stored'
-wait_http http://e2e-nextcloud/apps/saml_provider/saml/metadata "$nextcloud"
+# Kimai is registered later through the authenticated Nextcloud admin UI.
+# This ensures the real CSRF, SettingsController, validation, mapper and DBAL paths run.
 mkdir -p build/e2e/browser-artifacts
 printf 'Kimai E2E diagnostics initialized for %s\n' "${NEXTCLOUD_IMAGE:-nextcloud:34-apache}" > build/e2e/browser-artifacts/e2e-context.txt
-cat > build/e2e/kimai-local.yaml <<YAML
-kimai:
-  saml:
-    provider: nextcloud
-    activate: true
-    title: Login with Nextcloud
-    mapping:
-      - { saml: \$Email, kimai: email }
-    connection:
-      # This must be absolute and end in /auth/saml/ so IdP URLs are not paths.
-      baseurl: 'http://e2e-kimai:8001/auth/saml/'
-      debug: true
-      idp:
-        entityId: 'http://e2e-nextcloud/apps/saml_provider/saml/metadata'
-        singleSignOnService:
-          url: 'http://e2e-nextcloud/apps/saml_provider/saml/sso'
-          binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
-        x509cert: '${idp_cert}'
-      sp:
-        entityId: 'http://e2e-kimai:8001/auth/saml/metadata'
-        assertionConsumerService:
-          url: 'http://e2e-kimai:8001/auth/saml/acs'
-          binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
-YAML
-docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password "${MARIADB_IMAGE:-mariadb:11.4}" >/dev/null
-for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
-docker run -d --name "$kimai" --network "$network" -e 'DATABASE_URL=mysql://kimai:kimai@e2e-mariadb:3306/kimai?charset=utf8mb4&serverVersion=11.4.0-MariaDB' -e APP_SECRET=kimai-e2e-only -e TRUSTED_HOSTS='e2e-kimai|localhost|127\.0\.0\.1' -e TRUSTED_PROXIES='127.0.0.1,172.16.0.0/12' -v "$workspace/build/e2e/kimai-local.yaml:/opt/kimai/config/packages/local.yaml:ro" "${KIMAI_IMAGE:-kimai/kimai2:apache}" >/dev/null
-wait_http http://e2e-kimai:8001/ "$kimai"
-kimai_metadata_response="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --write-out $'\n%{http_code}' http://e2e-kimai:8001/auth/saml/metadata)" || fail 'Could not contact Kimai SAML metadata endpoint'
-kimai_metadata_status="${kimai_metadata_response##*$'\n'}"
-metadata="${kimai_metadata_response%$'\n'*}"
-printf '%s' "$metadata" > build/e2e/browser-artifacts/kimai-saml-metadata-response.txt
-if [[ ! "$kimai_metadata_status" =~ ^2[0-9][0-9]$ ]]; then
-  printf 'Kimai metadata endpoint returned HTTP %s. Response follows:\n%s\n' "$kimai_metadata_status" "$metadata" >&2
-  docker logs "$kimai" >&2 || true
-  fail 'Kimai SAML metadata endpoint did not return success'
-fi
-printf '%s' "$metadata" | grep -q EntityDescriptor || fail 'Kimai SAML metadata response has no EntityDescriptor'
-printf '%s' "$metadata" | grep -q 'http://e2e-kimai:8001/auth/saml/acs' || fail 'Kimai metadata has unexpected ACS'
-echo '================================================================='
-echo 'KIMAI SAML HTTP PREFLIGHT: validating public metadata and login endpoints'
-echo '================================================================='
-# The assertions above use Kimai's public SAML metadata document. Do not probe the
-# ACS with an empty POST: that intentionally invalid request creates a misleading error.
-kimai_login_headers="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --head http://e2e-kimai:8001/auth/saml/login)" || fail 'Could not contact Kimai SAML login endpoint'
-printf '%s\n' "$kimai_login_headers" > build/e2e/browser-artifacts/kimai-saml-login-headers.txt
-if ! printf '%s\n' "$kimai_login_headers" | grep -Eiq '^location: http://e2e-nextcloud/'; then
-  printf 'KIMAI SAML HTTP PREFLIGHT: FAILED. The public Kimai SAML login endpoint did not redirect to the configured Nextcloud IdP. Headers follow:\n%s\n' "$kimai_login_headers" >&2
-  fail 'Kimai SAML login endpoint has no expected Nextcloud redirect'
-fi
-echo 'KIMAI SAML HTTP PREFLIGHT: PASSED. Metadata is valid and login redirects to the configured IdP.'
-
+# The real browser-admin configuration runs after Playwright is prepared below.
 # Drive the entire user journey in a real browser. No Nextcloud login HTML,
 # CSRF representation, form action, or SAML POST form is parsed or replayed.
 # Pull before the trace marker: the marker now denotes the actual browser test.
@@ -131,6 +68,47 @@ docker run --rm --user "$(id -u):$(id -g)" \
   --env npm_config_cache=/tmp/npm-cache \
   "$playwright_image" \
   sh -ec "$playwright_setup"
+# Configure the IdP through the production Nextcloud admin interface.
+# No SQL fixture or direct app-config write is used for the application under test.
+docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
+  --volume "$playwright_work:/work" \
+  --volume "$workspace/tests/E2E/configure-kimai-admin.mjs:/work/configure-kimai-admin.mjs:ro" \
+  --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
+  --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
+  --env E2E_KIMAI_CONFIG=/work/browser-artifacts/kimai-idp.json \
+  "$playwright_image" node /work/configure-kimai-admin.mjs
+kimai_idp_json="$workspace/build/e2e/browser-artifacts/kimai-idp.json"
+[[ -s "$kimai_idp_json" ]] || fail 'Admin browser setup did not produce Kimai IdP configuration'
+certificate="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["certificate"].replace("\n", ""))' "$kimai_idp_json")"
+[[ -n "$certificate" ]] || fail 'Admin browser setup produced no IdP certificate'
+cat > build/e2e/kimai-local.yaml <<YAML
+kimai:
+  saml:
+    provider: nextcloud
+    activate: true
+    connection:
+      baseurl: 'http://e2e-nextcloud'
+      entity_id: 'http://e2e-nextcloud/apps/saml_provider/saml/metadata'
+      sso_url: 'http://e2e-nextcloud/apps/saml_provider/saml/sso'
+      x509cert: '$certificate'
+    user:
+      username: Email
+      roles: []
+YAML
+docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password mariadb:11.4 >/dev/null
+for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
+docker run -d --name "$kimai" --network "$network" -e 'DATABASE_URL=mysql://kimai:kimai@e2e-mariadb:3306/kimai?charset=utf8mb4&serverVersion=11.4.0-MariaDB' -e APP_SECRET=kimai-e2e-only -e TRUSTED_HOSTS='e2e-kimai|localhost|127\\.0\\.0\\.1' -e TRUSTED_PROXIES='127.0.0.1,172.16.0.0/12' -v "$workspace/build/e2e/kimai-local.yaml:/opt/kimai/config/packages/local.yaml:ro" "${KIMAI_IMAGE:-kimai/kimai2:apache}" >/dev/null
+wait_http http://e2e-kimai:8001/ "$kimai"
+kimai_metadata_response="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --write-out $'\n%{http_code}' http://e2e-kimai:8001/auth/saml/metadata)" || fail 'Could not contact Kimai SAML metadata endpoint'
+kimai_metadata_status="${kimai_metadata_response##*$'\n'}"
+metadata="${kimai_metadata_response%$'\n'*}"
+printf '%s' "$metadata" > build/e2e/browser-artifacts/kimai-saml-metadata-response.txt
+[[ "$kimai_metadata_status" =~ ^2[0-9][0-9]$ ]] || fail 'Kimai SAML metadata endpoint did not return success'
+printf '%s' "$metadata" | grep -Fq 'http://e2e-kimai:8001/auth/saml/acs' || fail 'Kimai metadata does not advertise its expected ACS URL'
+kimai_login_headers="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --head http://e2e-kimai:8001/auth/saml/login)" || fail 'Could not contact Kimai SAML login endpoint'
+printf '%s\n' "$kimai_login_headers" > build/e2e/browser-artifacts/kimai-saml-login-headers.txt
+printf '%s\n' "$kimai_login_headers" | grep -Eiq '^location: http://e2e-nextcloud/' || fail 'Kimai SAML login endpoint has no expected Nextcloud redirect'
+echo 'KIMAI SAML HTTP PREFLIGHT: PASSED. Metadata is valid and login redirects to the admin-configured Nextcloud IdP.'
 echo '================================================================='
 echo 'KIMAI SAML BROWSER E2E STARTS - copy logs from this line'
 echo 'Playwright SDK and browser image: 1.62.1'

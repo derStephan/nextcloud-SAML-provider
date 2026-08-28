@@ -13,7 +13,6 @@ namespace OCP {
     interface IUser { public function getUID(): string; public function getEMailAddress(): ?string; public function getDisplayName(): string; }
 }
 namespace OCP\AppFramework { class App { public function __construct(string $appName, array $urlParams = []) {} } }
-namespace OCP\AppFramework\Bootstrap { interface IBootstrap {} interface IRegistrationContext {} interface IBootContext {} }
 namespace OCP\AppFramework\Db {
     class Entity {
         protected ?int $id = null;
@@ -28,30 +27,25 @@ namespace OCP\AppFramework\Db {
         }
         /** @return list<string> */ public function getUpdatedFields(): array { return array_keys($this->updatedFields); }
     }
-    class QBMapper {}
-    class DoesNotExistException extends \RuntimeException {}
-}
-namespace OCA\SAMLProvider\Db {
-    class ServiceProviderMapper {
-        public ?ServiceProvider $byEntityId = null;
-        public ?ServiceProvider $byId = null;
-        public bool $requiresSignedRequests = false; public array $enabled=[]; public array $rows=[];
-        public function findByEntityId(string $entityId): ServiceProvider { if ($this->byEntityId === null) { throw new \OCP\AppFramework\Db\DoesNotExistException('Not found'); } return $this->byEntityId; }
-        public function find(int $id): ServiceProvider { if ($this->byId === null) { throw new \OCP\AppFramework\Db\DoesNotExistException('Not found'); } return $this->byId; }
-        public function findAll(): array { return $this->rows; }
-        public function findAllEnabled(): array { return $this->enabled; }
-        public function insert(ServiceProvider $sp): ServiceProvider { $sp->setId(count($this->rows)+1); $this->rows[]=$sp; $this->byEntityId=$sp; $this->byId=$sp; return $sp; }
-        public function update(ServiceProvider $sp): ServiceProvider { $this->byId=$sp; return $sp; }
-        public function delete(ServiceProvider $sp): void { $this->byId=null; }
-        public function anyRequiresSignedRequests(): bool { return $this->requiresSignedRequests; }
+    class QBMapper {
+        protected mixed $db;
+        public function __construct(mixed $db, string $tableName = '', string $entityClass = '') { $this->db = $db; }
+        protected function getTableName(): string { return 'saml_provider_sp'; }
+        protected function findEntity(mixed $queryBuilder): mixed { throw new DoesNotExistException('Not found'); }
+        protected function findEntities(mixed $queryBuilder): array { return []; }
+        public function insert(Entity $entity): Entity { return $entity; }
+        public function update(Entity $entity): Entity { return $entity; }
+        public function delete(Entity $entity): void {}
     }
+    class DoesNotExistException extends \RuntimeException {}
 }
 namespace {
     require_once __DIR__ . '/../vendor/autoload.php';
     require_once __DIR__ . '/Support/TestDoubles.php';
 }
 namespace OCP {
-    interface IRequest { public function getParam(string $key): mixed; public function getParams(): array; public function getMethod(): string; }
+    interface IDBConnection { public function getQueryBuilder(): mixed; }
+    interface IRequest { public function getParam(string $key): mixed; public function getParams(): array; public function getMethod(): string; public function getServerParam(string $key, mixed $default = null): mixed; }
     interface IUserSession { public function isLoggedIn(): bool; public function getUser(): ?IUser; public function logout(): void; }
     interface IL10N { public function t(string $text, array $parameters = []): string; }
 }

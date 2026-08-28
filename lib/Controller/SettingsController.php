@@ -10,6 +10,7 @@ use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\AuthorizedAdminSetting;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IL10N;
 use OCP\IRequest;
@@ -35,12 +36,7 @@ class SettingsController extends Controller {
     }
 
     #[AuthorizedAdminSetting(ISettings::class)]
-    public function saveIdp(string $orgName): DataResponse {
-        $this->idpConfig->setOrgName($orgName);
-        return new DataResponse(['orgName' => $orgName]);
-    }
-
-    #[AuthorizedAdminSetting(ISettings::class)]
+    #[UserRateLimit(limit: 2, period: 300)]
     public function generateCert(): DataResponse {
         $this->idpConfig->generateCertificate($this->idpConfig->getEntityId());
         return new DataResponse(['certificate' => $this->idpConfig->getCertificate()]);
@@ -51,11 +47,9 @@ class SettingsController extends Controller {
         string $spEntityId,
         string $spName,
         string $acsUrl,
-        string $sloUrl = '',
         string $nameIdFormat = 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
         string $attributeMapping = '{}',
         string $spCertificate = '',
-        bool $signAssertions = true,
         bool $requireSignedRequests = false,
     ): DataResponse {
         $error = $this->validateSpInput($spEntityId, $acsUrl, $nameIdFormat, $attributeMapping, $spCertificate, $requireSignedRequests);
@@ -73,11 +67,9 @@ class SettingsController extends Controller {
         $sp->setSpEntityId($spEntityId);
         $sp->setSpName($spName);
         $sp->setAcsUrl($acsUrl);
-        $sp->setSloUrl($sloUrl !== '' ? $sloUrl : null);
         $sp->setNameIdFormat($nameIdFormat);
         $sp->setAttributeMapping($attributeMapping !== '{}' ? $attributeMapping : null);
         $sp->setSpCertificate($spCertificate !== '' ? $spCertificate : null);
-        $sp->setSignAssertions($signAssertions);
         $sp->setRequireSignedRequests($requireSignedRequests);
         $sp->setIsEnabled(true);
         $sp = $this->spMapper->insert($sp);
@@ -111,10 +103,10 @@ class SettingsController extends Controller {
         if ($error !== null) {
             return new DataResponse(['error' => $error], Http::STATUS_BAD_REQUEST);
         }
-        foreach (['spName', 'acsUrl', 'sloUrl', 'nameIdFormat', 'attributeMapping', 'spCertificate'] as $key) {
+        foreach (['spName', 'acsUrl', 'nameIdFormat', 'attributeMapping', 'spCertificate'] as $key) {
             if (array_key_exists($key, $fields)) {
                 $value = (string)$fields[$key];
-                if (in_array($key, ['sloUrl', 'spCertificate'], true)) {
+                if ($key === 'spCertificate') {
                     $sp->{'set' . ucfirst($key)}($value !== '' ? $value : null);
                 } elseif ($key === 'attributeMapping') {
                     $sp->setAttributeMapping($value !== '{}' ? $value : null);
@@ -123,7 +115,7 @@ class SettingsController extends Controller {
                 }
             }
         }
-        foreach (['signAssertions', 'requireSignedRequests', 'isEnabled'] as $key) {
+        foreach (['requireSignedRequests', 'isEnabled'] as $key) {
             if (array_key_exists($key, $fields)) {
                 $sp->{'set' . ucfirst($key)}((bool)$fields[$key]);
             }
@@ -160,13 +152,22 @@ class SettingsController extends Controller {
         if (str_starts_with($ncBase, 'https://') && $scheme === 'http') {
             return $this->l->t('SAML Provider runs on HTTPS; cleartext HTTP is not allowed for service providers in production.');
         }
+        $mapping = json_decode($attributeMapping, true);
+        if (!is_array($mapping) || array_is_list($mapping)) {
+            return $this->l->t('Attribute mapping must be a JSON object');
+        }
+        foreach ($mapping as $attribute => $source) {
+            if (!is_string($attribute) || $attribute === '' || !is_string($source) || !in_array($source, ['uid', 'displayName', 'mail'], true)) {
+                return $this->l->t('Attribute mapping values must be uid, displayName, or mail');
+            }
+        }
         if (!in_array($nameIdFormat, self::NAME_ID_FORMATS, true)) {
             return $this->l->t('Unsupported NameID format');
         }
         if (json_decode($attributeMapping) === null && $attributeMapping !== 'null') {
             return $this->l->t('Attribute mapping must be valid JSON');
         }
-        if ($spCertificate !== '' && openssl_x509_read($spCertificate) === false) {
+        if ($spCertificate !== '' && !IdpConfigService::certificateIsCurrentlyValid($spCertificate)) {
             return $this->l->t('SP certificate is not a valid X.509 PEM certificate');
         }
         if ($requireSignedRequests && $spCertificate === '') {

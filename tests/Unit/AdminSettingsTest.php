@@ -4,7 +4,7 @@ namespace OCA\SAMLProvider\Tests\Unit;
 use OCA\SAMLProvider\Db\{ServiceProvider,ServiceProviderMapper};
 use OCA\SAMLProvider\Service\IdpConfigService;
 use OCA\SAMLProvider\Settings\Admin;
-use OCA\SAMLProvider\Tests\Support\{AppConfig,InitialState,UrlGenerator};
+use OCA\SAMLProvider\Tests\Support\{TestServiceProviderMapper,AppConfig,InitialState,UrlGenerator};
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ServiceProvider::class)]
 final class AdminSettingsTest extends TestCase {
  public function testPublishesIdpAndServiceProviderInitialState():void {
-  $config=new AppConfig(); $idp=new IdpConfigService($config,new UrlGenerator()); $mapper=new ServiceProviderMapper();
+  $config=new AppConfig(); $idp=new IdpConfigService($config,new UrlGenerator()); $mapper=new TestServiceProviderMapper();
   $sp=new ServiceProvider(); $sp->setSpName('Kimai'); $mapper->rows=[$sp]; $state=new InitialState();
   $admin=new Admin($idp,$mapper,$state); $response=$admin->getForm();
   self::assertSame('settings/index',$response->templateName); self::assertSame('saml_provider',$admin->getSection()); self::assertSame(50,$admin->getPriority());

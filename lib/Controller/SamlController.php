@@ -5,18 +5,20 @@ namespace OCA\SAMLProvider\Controller;
 
 use OCA\SAMLProvider\Service\IdpConfigService;
 use OCA\SAMLProvider\Service\SamlService;
-use OCA\SAMLProvider\Db\ServiceProviderMapper;
+use OCA\SAMLProvider\Service\RawQueryService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\Attribute\AnonRateLimit;
 use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\IURLGenerator;
+use OCP\Util;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
@@ -29,7 +31,7 @@ class SamlController extends Controller {
         private IUserSession $userSession,
         private IURLGenerator $urlGenerator,
         private LoggerInterface $logger,
-        private ServiceProviderMapper $spMapper,
+        private RawQueryService $rawQuery,
     ) {
         parent::__construct($appName, $request);
     }
@@ -38,6 +40,7 @@ class SamlController extends Controller {
     #[PublicPage]
     #[NoCSRFRequired]
     #[NoAdminRequired]
+    #[AnonRateLimit(limit: 60, period: 60)]
     public function metadata(): Http\Response {
         if (!$this->idpConfig->hasCertificate()) {
             return new Http\Response(Http::STATUS_NOT_FOUND);
@@ -57,6 +60,7 @@ class SamlController extends Controller {
     #[PublicPage]
     #[NoCSRFRequired]
     #[NoAdminRequired]
+    #[AnonRateLimit(limit: 30, period: 60)]
     public function sso(): Http\Response {
         $samlRequest = $this->request->getParam('SAMLRequest');
         $relayState  = $this->request->getParam('RelayState');
@@ -69,14 +73,14 @@ class SamlController extends Controller {
         try {
             $authnRequest = $this->samlService->parseAuthnRequest($samlRequest, $binding);
             $sp = $this->samlService->resolveServiceProvider($authnRequest['issuer']);
+            $this->samlService->enforceNameIdPolicy($authnRequest, $sp);
             $this->samlService->enforceRequestSignature(
                 $authnRequest, $binding, $this->request->getParams(), $sp,
-                isset($_SERVER['QUERY_STRING']) && is_string($_SERVER['QUERY_STRING'])
-                    ? $_SERVER['QUERY_STRING']
-                    : ''
+                $this->rawQuery->fromRequest($this->request)
             );
         } catch (\Throwable $e) {
-            $this->logger->warning('Rejected AuthnRequest: ' . $e->getMessage(), ['app' => 'saml_provider']);
+            // Do not concatenate attacker-influenced parser details into logs.
+            $this->logger->warning('Rejected AuthnRequest', ['app' => 'saml_provider', 'reason' => get_class($e)]);
             return new Http\Response(Http::STATUS_BAD_REQUEST);
         }
 
@@ -85,9 +89,7 @@ class SamlController extends Controller {
             // absolute URL is resolved again by some supported server versions.
             $ssoUrl = $this->urlGenerator->linkToRouteAbsolute('saml_provider.saml.sso');
             $currentUrl = (string)(parse_url($ssoUrl, PHP_URL_PATH) ?? '/');
-            $queryString = isset($_SERVER['QUERY_STRING']) && is_string($_SERVER['QUERY_STRING'])
-                ? $_SERVER['QUERY_STRING']
-                : '';
+            $queryString = $this->rawQuery->fromRequest($this->request);
             if ($queryString !== '') {
                 $currentUrl .= '?' . $queryString;
             }
@@ -109,9 +111,11 @@ class SamlController extends Controller {
         return $this->postFormResponse($sp->getAcsUrl(), $responseB64, is_string($relayState) ? $relayState : null);
     }
 
-    /** IdP-initiated SSO: posts an unsolicited Response to the SP. */
+    /**
+     * IdP-initiated SSO starts with a same-origin confirmation page. A GET request
+     * never creates an assertion, preventing third-party login CSRF.
+     */
     #[NoAdminRequired]
-    #[NoCSRFRequired]
     public function idpInitiated(int $spId): Http\Response {
         if (!$this->userSession->isLoggedIn()) {
             return new RedirectResponse(
@@ -125,35 +129,34 @@ class SamlController extends Controller {
         try {
             $sp = $this->samlService->resolveServiceProviderById($spId);
         } catch (\Throwable $e) {
-            $this->logger->warning('saml_provider: idpInitiated failed to resolve SP #{id}: {msg}', [
-                'id' => $spId, 'msg' => $e->getMessage(), 'exception' => $e,
-            ]);
+            $this->logger->warning('IdP-initiated login rejected for service {id}', ['app' => 'saml_provider', 'id' => $spId]);
+            return new Http\Response(Http::STATUS_NOT_FOUND);
+        }
+        Util::addScript('saml_provider', 'confirm_login');
+        return new TemplateResponse('saml_provider', 'page/confirm_login', [
+            'spId' => $spId,
+            'spName' => $sp->getSpName(),
+            'confirmUrl' => $this->urlGenerator->linkToRouteAbsolute('saml_provider.saml.confirmIdpInitiated', ['spId' => $spId]),
+        ]);
+    }
+
+    /** Creates an unsolicited assertion only after Nextcloud's CSRF middleware accepts the POST. */
+    #[NoAdminRequired]
+    public function confirmIdpInitiated(int $spId): Http\Response {
+        if (!$this->userSession->isLoggedIn()) {
+            return new Http\Response(Http::STATUS_UNAUTHORIZED);
+        }
+        try {
+            $sp = $this->samlService->resolveServiceProviderById($spId);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Confirmed IdP-initiated login rejected for service {id}', ['app' => 'saml_provider', 'id' => $spId]);
             return new Http\Response(Http::STATUS_NOT_FOUND);
         }
         $user = $this->userSession->getUser();
         if ($user === null) {
             return new Http\Response(Http::STATUS_UNAUTHORIZED);
         }
-        $responseB64 = $this->samlService->buildResponse($sp, $user, null, null);
-        return $this->postFormResponse($sp->getAcsUrl(), $responseB64, null);
-    }
-
-    /** Single Logout: ends the Nextcloud session, redirects back to the SP. */
-    #[PublicPage]
-    #[NoCSRFRequired]
-    #[NoAdminRequired]
-    public function slo(): RedirectResponse {
-        $relayState = $this->request->getParam('RelayState');
-        if ($this->userSession->isLoggedIn()) {
-            $this->userSession->logout();
-        }
-        
-        // Open-Redirect Mitigation: Verify RelayState (Redirect Target)
-        if (is_string($relayState) && $this->isSafeRedirectUrl($relayState)) {
-            return new RedirectResponse($relayState);
-        }
-        
-        return new RedirectResponse($this->urlGenerator->getBaseUrl());
+        return $this->postFormResponse($sp->getAcsUrl(), $this->samlService->buildResponse($sp, $user, null, null), null);
     }
 
     /** Auto-submitting HTML form that POSTs the SAMLResponse to the SP's ACS URL. */
@@ -181,61 +184,4 @@ class SamlController extends Controller {
         return $template;
     }
 
-    /**
-     * Prevents open redirects in RelayState.
-     *
-     * A relative path stays on this Nextcloud instance. Absolute URLs must have the
-     * exact same origin (scheme, host, and effective port) as Nextcloud or a registered
-     * ACS/SLO endpoint. Comparing only a host would allow an HTTPS-to-HTTP downgrade or
-     * a redirect to a different service listening on the same host and another port.
-     */
-    private function isSafeRedirectUrl(string $url): bool {
-        // Reject control characters and browser-ambiguous backslash paths up front.
-        if (preg_match('/[\x00-\x1F\x7F]/', $url) === 1) {
-            return false;
-        }
-        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_starts_with($url, '/\\')) {
-            return true;
-        }
-
-        $targetOrigin = $this->originOf($url);
-        if ($targetOrigin === null) {
-            return false;
-        }
-        if ($targetOrigin === $this->originOf($this->urlGenerator->getAbsoluteURL('/'))) {
-            return true;
-        }
-
-        foreach ($this->spMapper->findAllEnabled() as $sp) {
-            if ($targetOrigin === $this->originOf($sp->getAcsUrl())) {
-                return true;
-            }
-            $sloUrl = $sp->getSloUrl();
-            if ($sloUrl !== null && $sloUrl !== '' && $targetOrigin === $this->originOf($sloUrl)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** @return string|null Normalized http(s) origin, including its effective port. */
-    private function originOf(string $url): ?string {
-        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
-            return null;
-        }
-        $parts = parse_url($url);
-        if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])) {
-            return null;
-        }
-        $scheme = strtolower($parts['scheme']);
-        if ($scheme !== 'http' && $scheme !== 'https') {
-            return null;
-        }
-        $host = strtolower($parts['host']);
-        $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
-        if ($host === '' || $port < 1 || $port > 65535) {
-            return null;
-        }
-        return $scheme . '://' . $host . ':' . $port;
-    }
 }

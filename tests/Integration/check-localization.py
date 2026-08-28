@@ -11,7 +11,10 @@ l10n = root / 'l10n'
 base = json.loads((l10n / 'en.json').read_text(encoding='utf-8'))['translations']
 base_keys = set(base)
 errors: list[str] = []
+allowed_locales = {'en', 'de', 'de_DE'}
 for catalog in sorted(l10n.glob('*.json')):
+    if catalog.stem not in allowed_locales:
+        errors.append(f'{catalog.name}: incomplete locale is not a supported shipped catalog')
     data = json.loads(catalog.read_text(encoding='utf-8'))
     keys = set(data.get('translations', {}))
     if keys != base_keys:
@@ -39,12 +42,38 @@ def php_keys(path: Path) -> set[str]:
     source = path.read_text(encoding='utf-8')
     return set(re.findall(r'^\s*[\"\'](.+?)[\"\']\s*=>', source, re.M))
 php_base = php_keys(l10n / 'en.php')
+# Every literal server-side translation key must be present in the English PHP source catalog.
+used_php_keys: set[str] = set()
+for source in list((root / 'lib').rglob('*.php')) + list((root / 'templates').rglob('*.php')):
+    used_php_keys.update(re.findall(r"->t\(\s*['\"]([^'\"]+)['\"]", source.read_text(encoding='utf-8')))
+missing_used_php = sorted(used_php_keys - php_base)
+if missing_used_php:
+    errors.append(f'en.php: missing source keys used by PHP: {missing_used_php!r}')
 for catalog in sorted(l10n.glob('*.php')):
+    if catalog.stem not in allowed_locales:
+        errors.append(f'{catalog.name}: incomplete locale is not a supported shipped catalog')
     keys = php_keys(catalog)
     if keys != php_base:
         errors.append(f'{catalog.name}: PHP keys missing={sorted(php_base - keys)!r}; extra={sorted(keys - php_base)!r}')
 
+# German is a supported locale, so security-sensitive server messages must be translated.
+for german in (l10n / 'de.php', l10n / 'de_DE.php'):
+    source = german.read_text(encoding='utf-8')
+    for key in ('Entity ID must not be empty', 'SP certificate is not a valid X.509 PEM certificate', 'Service provider not found'):
+        if f'"{key}" => "{key}"' in source:
+            errors.append(f'{german.name}: required server-side message remains English: {key}')
+
 if errors:
     print('Localization catalog validation failed:', *errors, sep='\n- ', file=sys.stderr)
     sys.exit(1)
-print(f'Localization catalog validation passed: {len(base_keys)} UI keys across {len(list(l10n.glob("*.json")))} locales.')
+# Key parity ensures every message can be resolved. It is deliberately not a
+# translation-quality claim: report literal English fallbacks for human review.
+coverage = []
+for catalog in sorted(l10n.glob('*.json')):
+    if catalog.stem not in allowed_locales:
+        errors.append(f'{catalog.name}: incomplete locale is not a supported shipped catalog')
+    translations = json.loads(catalog.read_text(encoding='utf-8')).get('translations', {})
+    untranslated = sum(1 for key in base_keys if translations.get(key) == base.get(key))
+    coverage.append(f'{catalog.stem}: {len(base_keys) - untranslated}/{len(base_keys)} UI strings differ from English')
+print(f'Localization catalog structure passed: {len(base_keys)} UI keys across {len(list(l10n.glob("*.json")))} locales.')
+print('Translation-difference report (not a quality certification): ' + '; '.join(coverage))

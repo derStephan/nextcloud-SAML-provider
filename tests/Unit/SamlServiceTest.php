@@ -10,6 +10,7 @@ use OCA\SAMLProvider\Tests\Support\AppConfig;
 use OCA\SAMLProvider\Tests\Support\NullLogger;
 use OCA\SAMLProvider\Tests\Support\UrlGenerator;
 use OCA\SAMLProvider\Tests\Support\User;
+use OCA\SAMLProvider\Tests\Support\TestServiceProviderMapper;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -20,9 +21,9 @@ use PHPUnit\Framework\TestCase;
 final class SamlServiceTest extends TestCase {
     private ServiceProviderMapper $mapper; private IdpConfigService $idp; private SamlService $service;
     protected function setUp(): void {
-        $this->mapper = new ServiceProviderMapper();
+        $this->mapper = new TestServiceProviderMapper();
         $this->idp = new IdpConfigService(new AppConfig(), new UrlGenerator());
-        [$cert, $key] = $this->newCertificate(); $this->idp->setCertificate($cert, $key);
+        $this->idp->generateCertificate('cloud.example.test');
         $this->service = new SamlService($this->idp, $this->mapper, new SignatureService(), new NullLogger());
     }
     public function testMetadataContainsEndpointsAndSigningRequirement(): void {
@@ -33,7 +34,7 @@ final class SamlServiceTest extends TestCase {
         self::assertStringContainsString('<ds:X509Certificate>', $xml);
     }
     public function testParsesRedirectAndPostAuthnRequests(): void {
-        $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_request" AssertionConsumerServiceURL="https://sp.example.test/acs"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer><samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"/></samlp:AuthnRequest>';
+        $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_request" IssueInstant="' . gmdate('Y-m-d\TH:i:s\Z') . '" AssertionConsumerServiceURL="https://sp.example.test/acs"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer><samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"/></samlp:AuthnRequest>';
         $post = $this->service->parseAuthnRequest(base64_encode($xml), 'post');
         $redirect = $this->service->parseAuthnRequest(base64_encode(gzdeflate($xml)), 'redirect');
         foreach ([$post, $redirect] as $parsed) { self::assertSame('_request', $parsed['id']); self::assertSame('https://sp.example.test/metadata', $parsed['issuer']); self::assertSame('https://sp.example.test/acs', $parsed['acsUrl']); }
@@ -85,17 +86,16 @@ final class SamlServiceTest extends TestCase {
         }
     }
 
-    public function testBuildsPersistentNameIdAndUnsignedResponse(): void {
+    public function testBuildsPersistentNameIdAndAlwaysSignsResponse(): void {
         $sp = $this->provider();
         $sp->setNameIdFormat('urn:oasis:names:tc:SAML:2.0:nameid-format:persistent');
-        $sp->setSignAssertions(false);
         $sp->setAttributeMapping('{"department":"uid","unknown":"does-not-exist"}');
         $xml = base64_decode($this->service->buildResponse($sp, new User('alice', null, 'Alice'), null, null), true);
         self::assertNotFalse($xml);
         self::assertStringContainsString('Name="department"', $xml);
         self::assertStringNotContainsString('Name="unknown"', $xml);
         self::assertStringNotContainsString('InResponseTo=', $xml);
-        self::assertSame(1, substr_count($xml, '<ds:Signature xmlns:ds='));
+        self::assertSame(2, substr_count($xml, '<ds:Signature xmlns:ds='));
         self::assertStringNotContainsString('>alice</saml2:NameID>', $xml);
     }
 
@@ -118,6 +118,37 @@ final class SamlServiceTest extends TestCase {
         $service->enforceRequestSignature(['rawXml' => '<request/>'], 'post', [], $sp);
     }
 
-    private function provider(): ServiceProvider { $sp = new ServiceProvider(); $sp->setId(1); $sp->setSpEntityId('https://sp.example.test/metadata'); $sp->setSpName('Example SP'); $sp->setAcsUrl('https://sp.example.test/acs'); $sp->setSignAssertions(true); $sp->setIsEnabled(true); return $sp; }
+    private function provider(): ServiceProvider { $sp = new ServiceProvider(); $sp->setId(1); $sp->setSpEntityId('https://sp.example.test/metadata'); $sp->setSpName('Example SP'); $sp->setAcsUrl('https://sp.example.test/acs'); $sp->setIsEnabled(true); return $sp; }
     /** @return array{string,string} */ private function newCertificate(): array { $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]); self::assertNotFalse($key); $csr = openssl_csr_new(['commonName' => 'test'], $key); $cert = openssl_csr_sign($csr, null, $key, 1); openssl_x509_export($cert, $certPem); openssl_pkey_export($key, $keyPem); return [$certPem, $keyPem]; }
+    public function testRejectsExpiredAuthnRequestAndUnexpectedDestination(): void {
+        $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_fresh" Version="2.0" IssueInstant="2000-01-01T00:00:00Z"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer></samlp:AuthnRequest>';
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->parseAuthnRequest(base64_encode($xml), 'post');
+    }
+
+    public function testRejectsUnsupportedResponseBindingAndDtd(): void {
+        $xml = '<!DOCTYPE x [<!ENTITY e "x">]><samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_fresh" Version="2.0" IssueInstant="' . gmdate('Y-m-d\TH:i:s\Z') . '"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer></samlp:AuthnRequest>';
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->parseAuthnRequest(base64_encode($xml), 'post');
+    }
+
+    public function testRejectsANameIdPolicyThatDoesNotMatchTheService(): void {
+        $sp = $this->provider();
+        $sp->setNameIdFormat('urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress');
+        $this->expectException(\RuntimeException::class);
+        $this->service->enforceNameIdPolicy(['nameIdPolicy' => 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent'], $sp);
+    }
+
+
+    public function testPersistentNameIdUsesInstallationSecret(): void {
+        $sp = $this->provider();
+        $sp->setNameIdFormat('urn:oasis:names:tc:SAML:2.0:nameid-format:persistent');
+        $response = base64_decode($this->service->buildResponse($sp, new User('alice'), null, null), true);
+        self::assertIsString($response);
+        self::assertStringContainsString(hash_hmac('sha256', 'alice|' . $sp->getSpEntityId(), $this->idp->getPersistentNameIdPepper()), $response);
+        self::assertSame($this->idp->getPersistentNameIdPepper(), $this->idp->getPersistentNameIdPepper());
+    }
+
+
+
 }

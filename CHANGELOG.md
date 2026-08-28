@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.8.41
+
+- Support the documented `OCP\\Util::getL10N()` optional-parameter rename (`forceLanguage` to `language`) across the maintained Nextcloud integration matrix while keeping its arity, required argument, and return type checked.
+
 ## 0.8.40
 
 - Align release-hygiene signature-policy assertions with the named live HTTP-Redirect and HTTP-POST request cases in `tests/Integration/smoke.sh`.

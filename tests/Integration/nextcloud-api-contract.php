@@ -60,7 +60,24 @@ requireSignature('OCP\\IAppConfig', 'setValueString', ['app', 'key', 'value', 'l
 requireSignature('OCP\\IRequest', 'getParam', ['key', 'default'], null, $missing);
 requireSignature('OCP\\IRequest', 'getParams', [], 'array', $missing);
 requireSignature('OCP\\IRequest', 'getMethod', [], 'string', $missing);
-requireSignature('OCP\\Util', 'getL10N', ['application', 'forceLanguage'], 'OCP\\IL10N', $missing);
+// The app calls getL10N() with its required application argument only. Nextcloud
+// renamed the unused optional second parameter from forceLanguage to language across
+// maintained releases, so accept both documented spellings while keeping arity, the
+// required argument, and return type strict.
+if (method_exists('OCP\\Util', 'getL10N')) {
+    $getL10n = new ReflectionMethod('OCP\\Util', 'getL10N');
+    $getL10nParameters = $getL10n->getParameters();
+    $getL10nNames = array_map(static fn(ReflectionParameter $parameter): string => $parameter->getName(), $getL10nParameters);
+    $getL10nReturn = $getL10n->getReturnType();
+    if (count($getL10nNames) !== 2
+        || $getL10nNames[0] !== 'application'
+        || !in_array($getL10nNames[1], ['forceLanguage', 'language'], true)) {
+        $missing[] = 'incompatible parameter list: OCP\\Util::getL10N expected (application, forceLanguage|language) got (' . implode(', ', $getL10nNames) . ')';
+    }
+    if ($getL10nReturn === null || (string)$getL10nReturn !== 'OCP\\IL10N') {
+        $missing[] = 'incompatible return type: OCP\\Util::getL10N expected OCP\\IL10N got ' . ($getL10nReturn === null ? 'none' : (string)$getL10nReturn);
+    }
+}
 foreach (['OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit', 'OCP\\AppFramework\\Http\\Attribute\\UserRateLimit'] as $attribute) {
     if (class_exists($attribute)) {
         requireSignature($attribute, '__construct', ['limit', 'period'], null, $missing);

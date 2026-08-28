@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.33 - 2026-08-28
+
+- Treat Kimai's first-run onboarding wizard as an authenticated SAML destination, complete it through the real browser, and then prove access to the protected homepage.
+- Define the required browser, protocol, configuration, screenshot, HTML, and container-diagnostics artifacts in the Test Contract and upload the evidence bundle for every E2E target.
+- Ship complete JSON, JavaScript, and PHP UI catalogs for English, German, French, Spanish, Italian, Brazilian Portuguese, Polish, Russian, Japanese, and Simplified Chinese; document the coverage in the README.
+
 ## 0.8.32 - 2026-08-28
 
 - Provision the E2E Nextcloud administrator with `admin@example.test` so signed SAML responses include the `mail` attribute required by Kimai's mandatory email mapping.

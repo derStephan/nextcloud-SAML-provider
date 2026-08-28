@@ -67,6 +67,14 @@ jobs:
           path: docs/admin-settings-e2e-nc${{ matrix.target.label }}.png
           if-no-files-found: error
           retention-days: 30
+      - name: Upload SAML protocol and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: kimai-saml-evidence-v${{ steps.app-version.outputs.version }}-nc${{ matrix.target.label }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
+          path: build/e2e/browser-artifacts
+          if-no-files-found: warn
+          retention-days: 30
       - name: Collect container diagnostics
         if: failure()
         run: |

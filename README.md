@@ -136,6 +136,25 @@ Reload Kimai’s production cache after changing `local.yaml` (for example `bin/
 
 For additional Kimai-specific deployment guidance, see the [Kimai SAML documentation](https://www.kimai.org/documentation/saml.html).
 
+## Languages
+
+The user interface is shipped in these ten broadly used Nextcloud languages: **English** (`en`), **German** (`de`, including `de_DE`), **French** (`fr`), **Spanish** (`es`), **Italian** (`it`), **Portuguese — Brazil** (`pt_BR`), **Polish** (`pl`), **Russian** (`ru`), **Japanese** (`ja`), and **Chinese — Simplified** (`zh_CN`). Nextcloud documents all of these locale families in its own multilingual user documentation. The selection is an intentionally practical coverage set; Nextcloud does not publish a global, comparable language-usage ranking for all self-hosted instances.
+
+The application keeps JSON, JavaScript, and PHP catalogs in lockstep. Some explanatory copy is deliberately concise in the additional languages; SAML names, protocol tokens, URLs, and certificate identifiers remain unchanged because they are configuration values, not prose.
+
+## Test evidence artifacts
+
+Each Kimai E2E target produces a traceable evidence bundle:
+
+- browser traces for the negative, signed-positive, and tampered-response sessions;
+- terminal-state screenshots and bounded HTML captures, including any Kimai onboarding steps;
+- the persisted Nextcloud-to-Kimai IdP configuration and E2E context;
+- Nextcloud IdP metadata, Kimai login headers, and NameID-policy request/response captures;
+- a populated Nextcloud SAML administration screenshot after success; and
+- on failure, the container list and complete Nextcloud, Kimai, and MariaDB logs.
+
+Artifact names include the Nextcloud target and CI run. Browser/protocol evidence is retained for every run; diagnostics are added when a run fails.
+
 ## Security essentials
 
 - Use HTTPS for Nextcloud and every connected service.

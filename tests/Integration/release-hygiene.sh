@@ -45,6 +45,11 @@ grep -Fq 'wantAssertionsSigned: true' tests/E2E/kimai-saml.sh || { echo 'Kimai E
 grep -Fq 'wantMessagesSigned: true' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must require signed responses.' >&2; exit 1; }
 grep -Fq 'run_browser tampered' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must reject a tampered response.' >&2; exit 1; }
 grep -Fq 'isProtectedKimai' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must prove a protected authenticated session.' >&2; exit 1; }
+grep -Fq 'isKimaiWizard' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must handle authenticated first-run onboarding.' >&2; exit 1; }
+grep -Fq 'Upload SAML protocol and browser evidence' .github/workflows/kimai-saml-e2e.yml || { echo 'Kimai E2E must upload protocol and browser evidence for every run.' >&2; exit 1; }
+grep -Fq 'On failure additionally retain docker-ps' tests/Integration/print-test-contract.sh || { echo 'Test Contract must define failure diagnostics artifacts.' >&2; exit 1; }
+grep -Fq 'browser-flow traces for negative, positive, and tampered sessions' tests/Integration/print-test-contract.sh || { echo 'Test Contract must define browser-flow artifacts.' >&2; exit 1; }
+python3 tests/Integration/check-localization.py >/dev/null || { echo 'All shipped UI catalogs must be complete.' >&2; exit 1; }
 grep -Fq 'NEXTCLOUD LIVE PROTOCOL CONTRACT' tests/E2E/kimai-saml.sh || { echo 'Live metadata and NameID protocol checks are required.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml11' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 1.1 artifact label.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml20' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 2.0 artifact label.' >&2; exit 1; }

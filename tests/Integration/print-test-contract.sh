@@ -27,9 +27,16 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
 3. Kimai browser E2E: run the complete real-browser SAML journey against every
    dynamically discovered Nextcloud target. Configure the IdP only through the real
    Nextcloud admin UI; do not use SQL fixtures or direct app-config writes.
-4. E2E setup: disable Nextcloud firstrunwizard before browser login. After a fully
-   successful E2E journey, capture one populated Nextcloud SAML admin screenshot per
-   tested Nextcloud target and upload it as an artifact.
+4. E2E setup and evidence: disable Nextcloud firstrunwizard before browser login.
+   A fresh Kimai SAML user may receive Kimai's first-run wizard; complete it through the
+   real browser and then prove a protected Kimai homepage. For every target, retain
+   machine-readable browser-flow traces for negative, positive, and tampered sessions;
+   screenshots and bounded HTML snapshots for each terminal state; Kimai IdP settings;
+   Nextcloud metadata and Kimai login-response headers; SSO request/response headers and
+   bodies for both accepted NameID URNs and the rejected policy; and an E2E context file.
+   On failure additionally retain docker-ps plus full Nextcloud, Kimai, and MariaDB logs.
+   After a fully successful E2E journey, retain and upload one populated Nextcloud SAML
+   admin screenshot per tested target. Artifact names must include the target and run.
 5. E2E assertions: retain invalid-credential, signed positive SSO, and tampered
    SAMLResponse rejection flows. Verify Kimai metadata and login redirect through public
    HTTP endpoints before browser execution. Kimai 2.65+ requires connection.idp and

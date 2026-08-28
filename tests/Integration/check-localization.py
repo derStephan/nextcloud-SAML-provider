@@ -11,7 +11,7 @@ l10n = root / 'l10n'
 base = json.loads((l10n / 'en.json').read_text(encoding='utf-8'))['translations']
 base_keys = set(base)
 errors: list[str] = []
-allowed_locales = {'en', 'de', 'de_DE'}
+allowed_locales = {'en', 'de', 'de_DE', 'fr', 'es', 'it', 'pt_BR', 'pl', 'ru', 'ja', 'zh_CN'}
 for catalog in sorted(l10n.glob('*.json')):
     if catalog.stem not in allowed_locales:
         errors.append(f'{catalog.name}: incomplete locale is not a supported shipped catalog')
@@ -56,12 +56,12 @@ for catalog in sorted(l10n.glob('*.php')):
     if keys != php_base:
         errors.append(f'{catalog.name}: PHP keys missing={sorted(php_base - keys)!r}; extra={sorted(keys - php_base)!r}')
 
-# German is a supported locale, so security-sensitive server messages must be translated.
-for german in (l10n / 'de.php', l10n / 'de_DE.php'):
-    source = german.read_text(encoding='utf-8')
+# Every shipped non-English locale must replace the source text for security-sensitive server messages.
+for locale in sorted(allowed_locales - {'en'}):
+    source = (l10n / f'{locale}.php').read_text(encoding='utf-8')
     for key in ('Entity ID must not be empty', 'SP certificate is not a valid X.509 PEM certificate', 'Service provider not found'):
-        if f'"{key}" => "{key}"' in source:
-            errors.append(f'{german.name}: required server-side message remains English: {key}')
+        if f'"{key}" => "{key}"' in source or f"'{key}' => '{key}'" in source:
+            errors.append(f'{locale}.php: required server-side message remains English: {key}')
 
 if errors:
     print('Localization catalog validation failed:', *errors, sep='\n- ', file=sys.stderr)

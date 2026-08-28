@@ -132,6 +132,7 @@ probe_sso() {
   body_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-body.html"
   printf '%s' "$request_xml" > "$request_file"
   status="$(printf '%s' "$request_xml" | base64 -w0 | docker run -i --rm --network "$network" \
+    --user "$(id -u):$(id -g)" \
     --volume "$workspace/build/e2e/browser-artifacts:/artifacts" \
     "$curl_image" --silent --show-error \
     --output "/artifacts/$(basename "$body_file")" \
@@ -148,10 +149,17 @@ probe_sso() {
   fi
 }
 
-for nameid_urn in 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified' 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified'; do
+# Labels are deliberately fixed and filesystem-safe. URNs contain colons and must
+# never be used as artifact file names because GitHub preserves cross-platform names.
+for probe_label in nameid-unspecified-saml11 nameid-unspecified-saml20; do
+  case "$probe_label" in
+    nameid-unspecified-saml11) nameid_urn='urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified' ;;
+    nameid-unspecified-saml20) nameid_urn='urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified' ;;
+    *) fail "Unknown fixed NameID probe label: $probe_label" ;;
+  esac
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   request_xml="<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_nameid$(date +%s%N)\" Version=\"2.0\" IssueInstant=\"$now\" AssertionConsumerServiceURL=\"$persisted_acs\"><saml:Issuer>$persisted_entity</saml:Issuer><samlp:NameIDPolicy Format=\"$nameid_urn\"/></samlp:AuthnRequest>"
-  probe_sso "$(basename "$nameid_urn")" "$request_xml" 302
+  probe_sso "$probe_label" "$request_xml" 302
 done
 unsupported_urn='urn:example:unsupported-nameid-format'
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -506,6 +506,12 @@
 
 ## [Unreleased]
 
+## [0.8.30] - 2026-08-28
+
+- Use filesystem-safe fixed labels and explicit runner UID/GID for persisted SSO diagnostic artifacts.
+- Preserve strict NameID protocol assertions while making probe diagnostics reliably uploadable on every runner filesystem.
+
+
 ## [0.8.29] - 2026-08-28
 
 - Verify complete persisted Kimai service configuration after an admin-UI reload before live SAML protocol probes.

@@ -34,7 +34,7 @@ final class SamlServiceTest extends TestCase {
         self::assertStringContainsString('<ds:X509Certificate>', $xml);
     }
     public function testParsesRedirectAndPostAuthnRequests(): void {
-        $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_request" IssueInstant="' . gmdate('Y-m-d\TH:i:s\Z') . '" AssertionConsumerServiceURL="https://sp.example.test/acs"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer><samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"/></samlp:AuthnRequest>';
+        $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_request" Version="2.0" IssueInstant="' . gmdate('Y-m-d\TH:i:s\Z') . '" AssertionConsumerServiceURL="https://sp.example.test/acs"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer><samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"/></samlp:AuthnRequest>';
         $post = $this->service->parseAuthnRequest(base64_encode($xml), 'post');
         $redirect = $this->service->parseAuthnRequest(base64_encode(gzdeflate($xml)), 'redirect');
         foreach ([$post, $redirect] as $parsed) { self::assertSame('_request', $parsed['id']); self::assertSame('https://sp.example.test/metadata', $parsed['issuer']); self::assertSame('https://sp.example.test/acs', $parsed['acsUrl']); }

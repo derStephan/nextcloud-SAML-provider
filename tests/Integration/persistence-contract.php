@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-/** Real DBAL CRUD contract for the production ServiceProviderMapper. */
+/** Real Nextcloud DBAL CRUD: verifies production mapper insert, read, update, filtering, unique constraint, and delete. */
 use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Db\ServiceProviderMapper;
 use OCP\AppFramework\Db\DoesNotExistException;

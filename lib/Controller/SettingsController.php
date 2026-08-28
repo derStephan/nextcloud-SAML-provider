@@ -153,7 +153,7 @@ class SettingsController extends Controller {
             return $this->l->t('SAML Provider runs on HTTPS; cleartext HTTP is not allowed for service providers in production.');
         }
         $mapping = json_decode($attributeMapping, true);
-        if (!is_array($mapping) || array_is_list($mapping)) {
+        if (!is_array($mapping) || (array_is_list($mapping) && trim($attributeMapping) !== '{}')) {
             return $this->l->t('Attribute mapping must be a JSON object');
         }
         foreach ($mapping as $attribute => $source) {

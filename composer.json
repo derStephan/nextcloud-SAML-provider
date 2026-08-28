@@ -4,11 +4,11 @@
   "type": "nextcloud-app",
   "license": "MIT",
   "require": {
-    "php": ">=8.1",
+    "php": ">=8.2",
     "psr/log": "^3.0"
   },
   "require-dev": {
-    "phpunit/phpunit": "^10.5"
+    "phpunit/phpunit": "^11.5"
   },
   "autoload": {
     "psr-4": {
@@ -23,12 +23,5 @@
   "scripts": {
     "test": "phpunit --configuration phpunit.xml.dist",
     "test:coverage": "phpunit --configuration phpunit.xml.dist --coverage-clover build/coverage/clover.xml --coverage-text && php tests/check-coverage.php build/coverage/clover.xml 80"
-  },
-  "config": {
-    "audit": {
-      "ignore": {
-        "PKSA-z3gr-8qht-p93v": "PHPUnit is a test-only development dependency; production App Store packages contain no Composer dependencies. Remove this narrowly scoped exception when an unaffected PHPUnit 10 release is available."
-      }
-    }
   }
 }

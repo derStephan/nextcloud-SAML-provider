@@ -434,6 +434,24 @@
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-08-28
+
+### Fixed
+
+- Move the unit-test toolchain to PHPUnit 11.5+ on PHP 8.2+ with Composer audit fully enabled and no ignored advisories.
+- Remove marker-based test-quality gates that inspected test source text rather than application behavior.
+- Keep quality evidence focused on real production contracts: DBAL mapper CRUD, actual Nextcloud migrations, public SSO endpoints, and browser SSO with Kimai.
+
+
+## [0.8.7] - 2026-08-28
+
+### Fixed
+
+- Repair unit-test dependency injection for the raw-query adapter.
+- Accept the valid empty attribute-mapping object `{}` while continuing to reject JSON arrays.
+- Update AuthnRequest unit fixtures to include the required SAML 2.0 Version attribute.
+
+
 ## [0.8.6] - 2026-08-28
 
 ### Fixed

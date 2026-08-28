@@ -231,7 +231,7 @@ Unit tests
         -> Kimai SAML interoperability test
 ```
 
-Each downstream workflow starts only when its direct predecessor succeeds and checks out that predecessor’s exact commit SHA. PHP unit tests dynamically cover all PHP minor versions reported as currently supported by the PHP lifecycle API. This keeps language-runtime support current and does not alter release metadata. In contrast, Nextcloud 33/34 and SQLite, MariaDB, and PostgreSQL are the reviewed, repository-controlled compatibility evidence for integration and release decisions; an external lifecycle or Docker Hub API cannot silently change those release targets.
+Each downstream workflow starts only when its direct predecessor succeeds and checks out that predecessor’s exact commit SHA. PHP unit tests dynamically cover all currently supported PHP minor versions from PHP 8.2 onward, reported by the PHP lifecycle API. This keeps language-runtime support current and does not alter release metadata. In contrast, Nextcloud 33/34 and SQLite, MariaDB, and PostgreSQL are the reviewed, repository-controlled compatibility evidence for integration and release decisions; an external lifecycle or Docker Hub API cannot silently change those release targets.
 
 The **Release app** workflow is intentionally separate from CI. It has no `push` or `workflow_run` trigger: a maintainer starts it manually from `main`, supplies the exact semantic version, proven Nextcloud range, and specific user-visible release notes, and passes the protected `release` environment approval gate. The release workflow then updates only the selected metadata, creates an annotated tag, signs a runtime-only App Store archive, verifies that archive, and creates the GitHub release.
 
@@ -243,7 +243,7 @@ Persistent NameIDs are derived with HMAC-SHA256 from the Nextcloud user ID, the 
 
 ### Dependency and image provenance
 
-CI uses versioned action, container, npm, Composer, and Playwright references. The PHPUnit development dependency follows the maintained `^10.5` line. Composer’s narrowly scoped audit exception for `PKSA-z3gr-8qht-p93v` applies only to that test-only dependency; it does not disable Composer audit globally and must be removed once an unaffected PHPUnit 10 release is available. A reviewed `composer.lock` must still be generated in a Composer-capable environment before dependency resolution is fully reproducible. The browser E2E bootstrap still downloads the npm CLI and Playwright dependency graph during the run. It verifies downloaded bytes against registry-provided integrity metadata, which is useful transport integrity but is not an independently pinned supply-chain attestation. Likewise, Docker image tags are versioned but not digest-pinned. These are explicit residual supply-chain limitations, not release guarantees. Production archives contain no Composer or npm dependencies.
+CI uses versioned action, container, npm, Composer, and Playwright references. The unit-test toolchain uses PHPUnit `^11.5`, which supports PHP 8.2 and later. Composer audit is fully enabled: no advisory is ignored and no test-only security exception is configured. A reviewed `composer.lock` should be committed once generated in a Composer-capable environment so the transitive development dependency graph becomes reproducible. The browser E2E bootstrap still downloads the npm CLI and Playwright dependency graph during the run. It verifies downloaded bytes against registry-provided integrity metadata, which is useful transport integrity but is not an independently pinned supply-chain attestation. Likewise, Docker image tags are versioned but not digest-pinned. These are explicit residual supply-chain limitations, not release guarantees. Production archives contain no Composer or npm dependencies.
 
 
 ## Security notes
@@ -301,7 +301,7 @@ XDEBUG_MODE=coverage composer test:coverage
 
 The coverage command writes `build/coverage/clover.xml` and fails when line coverage is below **80%**.
 
-GitHub Actions discovers currently supported PHP versions from the [endoflife.date PHP API](https://endoflife.date/php), tests each one, and runs weekly as well as on push, pull request, and manual dispatch. Before PHPUnit, it executes the Public API Preflight described above.
+GitHub Actions discovers currently supported PHP versions from the [endoflife.date PHP API](https://endoflife.date/php), tests each one, and runs weekly as well as on push, pull request, and manual dispatch. Before PHPUnit, it executes the Public API Preflight described above. The CI does not use test-file counts or assertion-site counts as quality gates; quality evidence comes from executing tests and application contracts.
 
 The downstream Nextcloud integration and Kimai browser workflows use the reviewed, repository-controlled Nextcloud 33/34 matrix. Updating these release-evidence targets requires a reviewed pull request; no external lifecycle or Docker Hub API can alter them during a run.
 

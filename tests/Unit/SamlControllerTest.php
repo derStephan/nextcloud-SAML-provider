@@ -7,6 +7,7 @@ use OCA\SAMLProvider\Controller\SamlController;
 use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Service\IdpConfigService;
 use OCA\SAMLProvider\Service\SamlService;
+use OCA\SAMLProvider\Service\RawQueryService;
 use OCA\SAMLProvider\Tests\Support\AppConfig;
 use OCA\SAMLProvider\Tests\Support\NullLogger;
 use OCA\SAMLProvider\Tests\Support\Request;
@@ -32,7 +33,7 @@ final class SamlControllerTest extends TestCase {
 
     private function controller(Request $request, Session $session, ?SamlService $service = null): SamlController {
         $service ??= $this->createMock(SamlService::class);
-        return new SamlController('saml_provider', $request, $service, $this->idp, $session, $this->urls, new NullLogger());
+        return new SamlController('saml_provider', $request, $service, $this->idp, $session, $this->urls, new NullLogger(), new RawQueryService());
     }
 
     public function testMetadataIsHiddenUntilCertificateExists(): void {

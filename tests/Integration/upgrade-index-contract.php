@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-/** Verifies the additive Version0002 enabled-service index after real app migration. */
+/** Verifies persisted data and enabled-service index after Nextcloud executes the real Version0002 migration. */
 use OCP\IDBConnection;
 use OCP\Server;
 

@@ -434,6 +434,14 @@
 
 ## [Unreleased]
 
+## [0.8.9] - 2026-08-28
+
+### Fixed
+
+- Exercise SAML controller failure, redirect, session-consistency, and unknown-service paths with functional unit scenarios.
+- Declare the raw-query adapter as an explicitly used PHPUnit class, eliminating risky-test diagnostics without reducing strict coverage metadata.
+
+
 ## [0.8.8] - 2026-08-28
 
 ### Fixed

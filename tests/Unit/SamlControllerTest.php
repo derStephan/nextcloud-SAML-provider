@@ -22,6 +22,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SamlController::class)]
 #[UsesClass(IdpConfigService::class)]
 #[UsesClass(ServiceProvider::class)]
+#[UsesClass(RawQueryService::class)]
 final class SamlControllerTest extends TestCase {
     private IdpConfigService $idp;
     private RouteUrlGenerator $urls;
@@ -89,6 +90,56 @@ final class SamlControllerTest extends TestCase {
         self::assertStringContainsString('core.login.showLoginForm', $response->redirectURL);
     }
 
+    public function testSsoRejectsParserOrPolicyFailureWithoutLeakingDetails(): void {
+        $service = $this->createMock(SamlService::class);
+        $service->method('parseAuthnRequest')->willThrowException(new \InvalidArgumentException('attacker-controlled detail'));
+        $response = $this->controller(new Request(['SAMLRequest' => 'malformed'], 'POST'), new Session(), $service)->sso();
+        self::assertSame(400, $response->status);
+    }
+
+    public function testSsoRedirectPreservesRawQueryOnlyAfterRequestValidation(): void {
+        $service = $this->validService($this->provider());
+        $request = new Request(['SAMLRequest' => 'decoded value'], 'GET', ['QUERY_STRING' => 'SAMLRequest=decoded%20value&RelayState=next']);
+        $response = $this->controller($request, new Session(), $service)->sso();
+        self::assertSame(302, $response->status);
+        self::assertStringContainsString('redirect_url=%2Fsaml_provider.saml.sso%3FSAMLRequest%3Ddecoded%2520value%26RelayState%3Dnext', $response->redirectURL);
+    }
+
+    public function testSsoRejectsLoggedInSessionWithoutUserObject(): void {
+        $service = $this->validService($this->provider());
+        $session = new Session();
+        $session->loggedIn = true;
+        self::assertSame(401, $this->controller(new Request(['SAMLRequest' => 'request']), $session, $service)->sso()->status);
+    }
+
+    public function testIdpInitiatedRedirectsAnonymousAndRejectsUnknownService(): void {
+        $anonymous = $this->controller(new Request(), new Session())->idpInitiated(42);
+        self::assertSame(302, $anonymous->status);
+        self::assertStringContainsString('core.login.showLoginForm', $anonymous->redirectURL);
+
+        $service = $this->createMock(SamlService::class);
+        $service->method('resolveServiceProviderById')->willThrowException(new \RuntimeException('not found'));
+        $session = new Session(new User());
+        $session->loggedIn = true;
+        self::assertSame(404, $this->controller(new Request(), $session, $service)->idpInitiated(42)->status);
+    }
+
+    public function testConfirmedIdpInitiatedLoginRejectsAnonymousUnknownAndMissingUserSessions(): void {
+        self::assertSame(401, $this->controller(new Request([], 'POST'), new Session())->confirmIdpInitiated(1)->status);
+
+        $unknown = $this->createMock(SamlService::class);
+        $unknown->method('resolveServiceProviderById')->willThrowException(new \RuntimeException('not found'));
+        $loggedIn = new Session(new User());
+        $loggedIn->loggedIn = true;
+        self::assertSame(404, $this->controller(new Request([], 'POST'), $loggedIn, $unknown)->confirmIdpInitiated(1)->status);
+
+        $service = $this->createMock(SamlService::class);
+        $service->method('resolveServiceProviderById')->willReturn($this->provider());
+        $missingUser = new Session();
+        $missingUser->loggedIn = true;
+        self::assertSame(401, $this->controller(new Request([], 'POST'), $missingUser, $service)->confirmIdpInitiated(1)->status);
+    }
+
     public function testIdpInitiatedGetShowsConfirmationInsteadOfCreatingAssertion(): void {
         $service = $this->createMock(SamlService::class);
         $service->method('resolveServiceProviderById')->willReturn($this->provider());
@@ -109,6 +160,13 @@ final class SamlControllerTest extends TestCase {
         $response = $this->controller(new Request([], 'POST'), $session, $service)->confirmIdpInitiated(1);
         self::assertSame('post_response', $response->templateName);
         self::assertSame('https://sp.example.test/acs', $response->params['acsUrl']);
+    }
+
+    private function validService(ServiceProvider $sp): SamlService {
+        $service = $this->createMock(SamlService::class);
+        $service->method('parseAuthnRequest')->willReturn(['id' => '_id', 'issuer' => 'sp', 'acsUrl' => null, 'nameIdPolicy' => null, 'rawXml' => '<request/>']);
+        $service->method('resolveServiceProvider')->willReturn($sp);
+        return $service;
     }
 
     private function provider(string $acsUrl = 'https://sp.example.test/acs'): ServiceProvider {

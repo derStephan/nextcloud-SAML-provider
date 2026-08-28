@@ -36,6 +36,10 @@ grep -q 'scripts/prepare-release.php' "$release" || { echo 'Release must update 
 # Coverage is a release-blocking quality gate, not an informational report.
 grep -Fq 'php tests/check-coverage.php build/coverage/clover.xml 80' composer.json || { echo 'Production coverage must enforce the 80% threshold.' >&2; exit 1; }
 grep -Fq 'name: Enforce minimum 80% production statement coverage (blocking)' .github/workflows/tests.yml || { echo 'Unit workflow must include the named blocking coverage gate.' >&2; exit 1; }
+grep -Fq 'codecov/codecov-action@v6' .github/workflows/tests.yml || { echo 'Unit workflow must upload Clover coverage through Codecov.' >&2; exit 1; }
+grep -Fq 'token: ${{ secrets.CODECOV_TOKEN }}' .github/workflows/tests.yml || { echo 'Codecov upload must use the CODECOV_TOKEN secret.' >&2; exit 1; }
+grep -Fq 'codecov.io/gh/derStephan/nextcloud-SAML-provider/graph/badge.svg' README.md || { echo 'README must display the Codecov coverage badge.' >&2; exit 1; }
+! grep -Fq '## Test evidence artifacts' README.md || { echo 'Evidence artifact instructions belong in the Test Contract, not the README.' >&2; exit 1; }
 grep -Fq 'run: composer test:coverage' .github/workflows/tests.yml || { echo 'Unit workflow must run the blocking coverage command.' >&2; exit 1; }
 
 # Static source checks are intentionally not executed as functional evidence here.
@@ -50,8 +54,19 @@ grep -Fq 'wizard: false' tests/E2E/kimai-saml.sh || { echo 'Dynamic Kimai E2E co
 grep -Fq 'requestProtectedKimaiPage' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must prove a protected route through HTTP semantics.' >&2; exit 1; }
 ! grep -Fq 'hasVisibleLogout' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E session proof must not depend on UI labels.' >&2; exit 1; }
 grep -Fq 'Upload SAML protocol and browser evidence' .github/workflows/kimai-saml-e2e.yml || { echo 'Kimai E2E must upload protocol and browser evidence for every run.' >&2; exit 1; }
-grep -Fq 'On failure additionally retain docker-ps' tests/Integration/print-test-contract.sh || { echo 'Test Contract must define failure diagnostics artifacts.' >&2; exit 1; }
-grep -Fq 'browser-flow traces for negative, positive, and tampered sessions' tests/Integration/print-test-contract.sh || { echo 'Test Contract must define browser-flow artifacts.' >&2; exit 1; }
+grep -Fq 'On failure additionally retain docker-ps' tests/TEST_CONTRACT.md || { echo 'Test Contract must define failure diagnostics artifacts.' >&2; exit 1; }
+grep -Fq 'This rule applies to every existing and future test' tests/TEST_CONTRACT.md || { echo 'Test Contract must make Docker log hygiene universal.' >&2; exit 1; }
+grep -Fq 'Do not emit `docker logs` on success' tests/TEST_CONTRACT.md || { echo 'Test Contract must prohibit routine Docker log flooding.' >&2; exit 1; }
+grep -Fq 'Retain full unfiltered container logs as failure artifacts' tests/TEST_CONTRACT.md || { echo 'Test Contract must preserve complete failure logs as artifacts.' >&2; exit 1; }
+grep -Fq 'browser-flow traces for negative, positive, and tampered sessions' tests/TEST_CONTRACT.md || { echo 'Test Contract must define browser-flow artifacts.' >&2; exit 1; }
+[[ -f AGENTS.md ]] || { echo 'Missing repository-wide AGENTS.md instructions.' >&2; exit 1; }
+[[ -f .github/copilot-instructions.md ]] || { echo 'Missing GitHub Copilot repository instructions.' >&2; exit 1; }
+[[ -f .github/instructions/testing.instructions.md ]] || { echo 'Missing path-specific testing instructions.' >&2; exit 1; }
+grep -Fq 'tests/TEST_CONTRACT.md' AGENTS.md || { echo 'AGENTS.md must direct agents to the canonical Test Contract.' >&2; exit 1; }
+grep -Fq 'tests/TEST_CONTRACT.md' .github/copilot-instructions.md || { echo 'Copilot instructions must direct agents to the canonical Test Contract.' >&2; exit 1; }
+grep -Fq 'applyTo: "tests/**,.github/workflows/**,composer.json,phpunit.xml.dist"' .github/instructions/testing.instructions.md || { echo 'Testing instructions must apply to test and CI files.' >&2; exit 1; }
+grep -Fq 'tests/TEST_CONTRACT.md' tests/Integration/print-test-contract.sh || { echo 'CI contract wrapper must print the canonical Test Contract.' >&2; exit 1; }
+! grep -Fq "cat <<'CONTRACT'" tests/Integration/print-test-contract.sh || { echo 'CI contract wrapper must not duplicate canonical contract text.' >&2; exit 1; }
 python3 tests/Integration/check-localization.py >/dev/null || { echo 'All shipped UI catalogs must be complete.' >&2; exit 1; }
 grep -Fq 'NEXTCLOUD LIVE PROTOCOL CONTRACT' tests/E2E/kimai-saml.sh || { echo 'Live metadata and NameID protocol checks are required.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml11' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 1.1 artifact label.' >&2; exit 1; }

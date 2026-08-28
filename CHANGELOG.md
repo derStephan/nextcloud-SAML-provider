@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.38 - 2026-08-28
+
+- Establish `tests/TEST_CONTRACT.md` as the canonical, agent-readable Test Contract; keep it printed verbatim in every CI test log through a thin wrapper.
+- Add portable `AGENTS.md`, GitHub Copilot repository instructions, and path-specific testing instructions. Release hygiene now enforces their presence and contract linkage.
+
+## 0.8.37 - 2026-08-28
+
+- Move the E2E evidence-artifact catalog from the README into the durable Test Contract, where it is enforced for every target and failure path.
+- Make Docker log hygiene universal for existing and future tests: suppress routine container noise, print only genuine diagnostics when needed, and retain complete container logs as failure artifacts.
+- Add a Codecov coverage badge and enforce the existing Codecov Clover upload with the `CODECOV_TOKEN` repository secret.
+
 ## 0.8.36 - 2026-08-28
 
 - Keep `kimai/kimai2:apache` dynamically pulled for current-Kimai compatibility; correct the test contract so it no longer calls the Kimai image pinned.

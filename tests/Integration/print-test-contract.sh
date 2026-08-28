@@ -46,8 +46,11 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
 6. Toolchain floor: PHP >=8.2; PHPUnit ^11.5; Node.js 24 in the pinned Playwright
    image; npm 12.0.2; Playwright 1.62.1. Keep versions explicit and compatible.
 7. CI hygiene: use actions/upload-artifact@v6 or later (Node 24 runtime). Suppress
-   Docker layer progress for both integration and E2E image pulls, but preserve
-   failed-command diagnostics. Every successful complete Unit -> integration -> Kimai
+   Docker layer progress for both integration and E2E image pulls. When Docker logs are
+   emitted for diagnosis, suppress routine lifecycle chatter such as "completed",
+   "verified", readiness and layer-status lines so it does not pollute the test log;
+   never suppress Docker error, warning, failure, fatal, panic, or exception diagnostics.
+   Every successful complete Unit -> integration -> Kimai
    E2E chain for main, including normal pushes and scheduled compatibility checks,
    must create a patch release. Before any release work, fail clearly unless all three
    required release secrets are present: NEXTCLOUD_SIGNING_PRIVATE_KEY,

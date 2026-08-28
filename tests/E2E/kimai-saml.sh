@@ -12,6 +12,17 @@ cleanup(){
 }
 trap cleanup EXIT
 fail(){ echo "E2E failure: $*" >&2; exit 1; }
+# Docker startup chatter is not actionable in a failed test. Keep explicit error,
+# warning and exception lines, but omit routine lifecycle messages from diagnostics.
+print_docker_failure_logs(){
+  local name="$1"
+  docker logs "$name" 2>&1 | awk '    BEGIN { IGNORECASE=1 }
+    /error|fatal|exception|critical|panic|fail(ed|ure)?|warn(ing)?/ { print; next }
+    /(^|[[:space:]])(completed|verified|ready|started|healthy|initialized|initializing)([[:space:].,:;]|$)/ { next }
+    /layer already exists|pull complete|download complete|digest:|status: downloaded/ { next }
+    { print }
+  ' || true
+}
 pull_image_quietly(){
   local image="$1" pull_log
   pull_log="$(mktemp)"
@@ -33,7 +44,7 @@ wait_http(){
     if [[ "$status" =~ ^[123][0-9]{2}$ ]]; then return 0; fi
     sleep 2
   done
-  docker logs "$name" >&2 || true
+  print_docker_failure_logs "$name"
   fail "Timed out waiting for $url (last HTTP status: ${status:-none})"
 }
 bash "$workspace/tests/Integration/print-test-contract.sh"
@@ -49,7 +60,7 @@ for image in "$curl_image" "$nextcloud_image" "$mariadb_image" "$kimai_image" "$
 docker network create "$network" >/dev/null
 docker run -d --name "$nextcloud" --network "$network" -v "$workspace:/var/www/html/custom_apps/saml_provider:ro" "$nextcloud_image" >/dev/null
 wait_http http://e2e-nextcloud/status.php "$nextcloud"
-docker exec --user www-data "$nextcloud" php occ maintenance:install --database sqlite --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data >/dev/null
+docker exec --user www-data "$nextcloud" php occ maintenance:install --database sqlite --database-name nextcloud --admin-user admin --admin-pass integration-test-password --admin-email admin@example.test --data-dir /var/www/html/data >/dev/null
 # Disable Nextcloud's first-run wizard in this ephemeral test instance before any browser login.
 # This keeps the E2E flow and documentation capture focused on the populated SAML settings.
 docker exec --user www-data "$nextcloud" php occ app:disable firstrunwizard >/dev/null
@@ -145,7 +156,7 @@ probe_sso_login_redirect() {
     printf 'SSO login probe %s expected HTTP 302 or 303, received HTTP %s.\n' "$label" "$status" >&2
     cat "$header_file" >&2 || true
     head -c 4000 "$body_file" >&2 || true
-    docker logs "$nextcloud" >&2 || true
+    print_docker_failure_logs "$nextcloud"
     fail "Running SSO endpoint did not redirect accepted request $label to Nextcloud login"
   fi
   python3 - "$header_file" <<'PY'
@@ -182,7 +193,7 @@ probe_sso_rejection() {
     printf 'Rejected SSO probe %s expected HTTP 400, received HTTP %s.\n' "$label" "$status" >&2
     cat "$header_file" >&2 || true
     head -c 4000 "$body_file" >&2 || true
-    docker logs "$nextcloud" >&2 || true
+    print_docker_failure_logs "$nextcloud"
     fail "Running SSO endpoint did not reject unsupported request $label"
   fi
 }
@@ -238,7 +249,7 @@ kimai:
         wantMessagesSigned: true
 YAML
 docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password "$mariadb_image" >/dev/null
-for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
+for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent >/dev/null && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
 docker run -d --name "$kimai" --network "$network" -e 'DATABASE_URL=mysql://kimai:kimai@e2e-mariadb:3306/kimai?charset=utf8mb4&serverVersion=11.4.0-MariaDB' -e APP_SECRET=kimai-e2e-only -e TRUSTED_HOSTS='e2e-kimai|localhost|127\\.0\\.0\\.1' -e TRUSTED_PROXIES='127.0.0.1,172.16.0.0/12' -v "$workspace/build/e2e/kimai-local.yaml:/opt/kimai/config/packages/local.yaml:ro" "$kimai_image" >/dev/null
 wait_http http://e2e-kimai:8001/ "$kimai"
 # The root route can answer before Kimai has finished warming the SAML subsystem.
@@ -253,7 +264,7 @@ for attempt in $(seq 1 60); do
   if [[ "$kimai_metadata_status" =~ ^2[0-9][0-9]$ ]] && printf '%s' "$metadata" | grep -Fq 'http://e2e-kimai:8001/auth/saml/acs'; then
     break
   fi
-  [[ "$attempt" == 60 ]] && { docker logs "$kimai" >&2 || true; fail "Kimai SAML metadata contract did not become ready (last HTTP status: $kimai_metadata_status)"; }
+  [[ "$attempt" == 60 ]] && { print_docker_failure_logs "$kimai"; fail "Kimai SAML metadata contract did not become ready (last HTTP status: $kimai_metadata_status)"; }
   sleep 2
 done
 kimai_login_headers="$(docker run --rm --network "$network" "$curl_image" --silent --show-error --head http://e2e-kimai:8001/auth/saml/login)" || fail 'Could not contact Kimai SAML login endpoint'

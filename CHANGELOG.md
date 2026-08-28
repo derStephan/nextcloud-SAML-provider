@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.32 - 2026-08-28
+
+- Provision the E2E Nextcloud administrator with `admin@example.test` so signed SAML responses include the `mail` attribute required by Kimai's mandatory email mapping.
+- Keep Docker failure diagnostics actionable: suppress routine lifecycle chatter such as `completed` and `verified`, while preserving error, warning, failure, fatal, panic and exception lines.
+- Extend the durable Test Contract with this Docker diagnostic-log hygiene requirement.
+
 ## 0.8.24
 
 ### Persisted Kimai NameID verification

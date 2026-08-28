@@ -9,7 +9,7 @@ for attempt in $(seq 1 60); do
   [[ "$attempt" == 60 ]] && { docker logs "$container" >&2 || true; exit 1; }
   sleep 2
 done
-install=(php occ maintenance:install --database "$driver" --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data)
+install=(php occ maintenance:install --database "$driver" --database-name nextcloud --admin-user admin --admin-pass integration-test-password --admin-email admin@example.test --data-dir /var/www/html/data)
 case "$driver" in
   sqlite) ;;
   mysql|pgsql) install+=(--database-host integration-db --database-user nextcloud --database-pass integration-test-password) ;;

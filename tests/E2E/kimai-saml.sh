@@ -102,8 +102,8 @@ kimai_idp_json="$workspace/build/e2e/browser-artifacts/kimai-idp.json"
 # Kimai consumes the certificate as a single base64 line without PEM markers.
 # Its 2.65 SAML bundle requires the nested connection.idp/connection.sp schema;
 # an old flat connection schema silently leaves the SAML routes unregistered.
-certificate="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1]))["certificate"]; print("".join(line for line in c.splitlines() if "CERTIFICATE" not in line))' "$kimai_idp_json")"
-[[ -n "$certificate" ]] || fail 'Admin browser setup produced no IdP certificate body'
+certificate="$(python3 -c 'import json,re,sys; c=json.load(open(sys.argv[1]))["certificate"]; c=re.sub(r"-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----", "", c); print(re.sub(r"\s+", "", c))' "$kimai_idp_json")"
+[[ "$certificate" =~ ^[A-Za-z0-9+/=]+$ ]] || fail 'Admin browser setup produced an invalid IdP certificate body'
 cat > build/e2e/kimai-local.yaml <<YAML
 kimai:
   saml:

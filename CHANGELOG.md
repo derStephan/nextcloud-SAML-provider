@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.18
+
+### E2E certificate normalization repair
+
+- Normalize Nextcloud PEM certificate values by removing only PEM markers and whitespace, preserving certificate content from both single-line and multi-line admin-widget output.
+- Add a regression test for both supported PEM field representations.
+
 ## 0.8.17
 
 ### Kimai 2.65 SAML compatibility

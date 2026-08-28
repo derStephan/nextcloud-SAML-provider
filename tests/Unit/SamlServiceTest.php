@@ -120,6 +120,12 @@ final class SamlServiceTest extends TestCase {
 
     private function provider(): ServiceProvider { $sp = new ServiceProvider(); $sp->setId(1); $sp->setSpEntityId('https://sp.example.test/metadata'); $sp->setSpName('Example SP'); $sp->setAcsUrl('https://sp.example.test/acs'); $sp->setIsEnabled(true); return $sp; }
     /** @return array{string,string} */ private function newCertificate(): array { $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]); self::assertNotFalse($key); $csr = openssl_csr_new(['commonName' => 'test'], $key); $cert = openssl_csr_sign($csr, null, $key, 1); openssl_x509_export($cert, $certPem); openssl_pkey_export($key, $keyPem); return [$certPem, $keyPem]; }
+    public function testRejectsMissingIssueInstant(): void {
+        $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_missing-time" Version="2.0"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer></samlp:AuthnRequest>';
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service->parseAuthnRequest(base64_encode($xml), 'post');
+    }
+
     public function testRejectsExpiredAuthnRequestAndUnexpectedDestination(): void {
         $xml = '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_fresh" Version="2.0" IssueInstant="2000-01-01T00:00:00Z"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://sp.example.test/metadata</saml:Issuer></samlp:AuthnRequest>';
         $this->expectException(\InvalidArgumentException::class);

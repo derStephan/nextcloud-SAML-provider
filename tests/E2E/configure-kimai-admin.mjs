@@ -54,6 +54,9 @@ try {
   await page.getByRole('button', { name: 'Connect service', exact: true }).click();
   const created = await createResponse;
   if (!created.ok()) throw new Error(`Kimai service creation failed with HTTP ${created.status()}.`);
+  const createdPayload = await created.json().catch(() => ({}));
+  const serviceId = Number(createdPayload.id);
+  if (!Number.isInteger(serviceId) || serviceId <= 0) throw new Error(`Kimai service creation did not return a valid service ID: ${JSON.stringify(createdPayload)}.`);
 
   const serviceRow = page.getByText(kimai.name, { exact: true }).locator('xpath=ancestor::tr');
   await serviceRow.waitFor({ state: 'visible' });
@@ -91,7 +94,7 @@ try {
   if (mismatches.length > 0) {
     throw new Error(`Kimai service was not persisted after reload: expected ${JSON.stringify(expected)}, got ${JSON.stringify(persisted)}.`);
   }
-  await writeFile(output, JSON.stringify({ ...kimai, certificate, persisted }, null, 2));
+  await writeFile(output, JSON.stringify({ ...kimai, certificate, serviceId, persisted }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${artifactDirectory}/admin-configuration-failure.png`, fullPage: true }).catch(() => {});
   throw error;

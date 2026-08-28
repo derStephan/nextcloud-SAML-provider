@@ -154,20 +154,25 @@ The application keeps JSON, JavaScript, and PHP catalogs in lockstep. Some expla
 
 ## Automated compatibility releases
 
-A scheduled compatibility check discovers maintained PHP and Nextcloud versions. A regular push still runs the normal test chain, but **only scheduled runs** can automatically publish a release.
+Every successful complete Unit → integration → Kimai E2E chain for `main`, including regular pushes and scheduled compatibility checks, creates a patch release when the protected release secrets are available.
 
-1. The scheduled Unit workflow discovers maintained PHP 8.2+ releases and enforces the 80% production-coverage gate.
+1. Unit tests discover maintained PHP 8.2+ releases and enforce the 80% production-coverage gate.
 2. The integration workflow discovers maintained Nextcloud majors plus the newest Apache RC/Beta and runs each target with SQLite, MariaDB, and PostgreSQL.
-3. Kimai E2E runs the full real-browser SAML journey for every discovered Nextcloud target and captures one populated administration screenshot per successful target.
-4. After every scheduled, completely green chain, the release workflow compares the freshly tested maintained Nextcloud range with the recorded compatibility marker.
-5. Only if the compatibility range changed, it updates the README and App Store description, increments the patch version, signs the runtime-only archive, tags it, and creates the GitHub/App Store release.
+3. Kimai E2E runs the full real-browser SAML journey for every discovered Nextcloud target and captures the required protocol and browser evidence.
+4. The release workflow records the freshly tested compatibility range, increments the patch version, signs the runtime-only archive, tags it, and publishes the GitHub/App Store release.
 
 The release archive contains only runtime app files. It never contains test code, CI configuration, build directories, signing keys, or placeholder signatures.
 
 ## Support and scope
 
+### Interoperability and upgrade scope
+
+- The IdP accepts exclusive XML canonicalization (`http://www.w3.org/2001/10/xml-exc-c14n#`) for signed POST AuthnRequests. Other canonicalization profiles are rejected deliberately.
+- If an SP sends `Destination`, it must exactly match the public SSO URL configured by Nextcloud. Deployments behind reverse proxies must configure Nextcloud's canonical external URL accordingly.
+- Version 0.8.0 was never released to production. This project does not provide or test a schema-upgrade path from that unreleased pre-production version.
+
 - **Languages:** English and German are maintained. Nextcloud falls back to English for other languages.
-- **Development dependencies:** Composer audit is enabled. A reviewed `composer.lock` should be committed when generated in a Composer-capable environment.
+- **Development dependencies:** Composer audit is not currently part of CI. Dependency security review and a committed lockfile are planned separately; do not infer an audit guarantee from this repository.
 - **Issue reports:** include the Nextcloud version, app version, browser/service-provider details, and relevant non-sensitive logs.
 
 ## License

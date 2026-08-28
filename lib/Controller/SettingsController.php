@@ -164,9 +164,6 @@ class SettingsController extends Controller {
         if (!in_array($nameIdFormat, self::NAME_ID_FORMATS, true)) {
             return $this->l->t('Unsupported NameID format');
         }
-        if (json_decode($attributeMapping) === null && $attributeMapping !== 'null') {
-            return $this->l->t('Attribute mapping must be valid JSON');
-        }
         if ($spCertificate !== '' && !IdpConfigService::certificateIsCurrentlyValid($spCertificate)) {
             return $this->l->t('SP certificate is not a valid X.509 PEM certificate');
         }

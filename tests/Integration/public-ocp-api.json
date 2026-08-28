@@ -34,7 +34,8 @@
     ],
     "OCP\\Util": [
       "addScript",
-      "addStyle"
+      "addStyle",
+      "getL10N"
     ],
     "OCP\\IDBConnection": [
       "getQueryBuilder"

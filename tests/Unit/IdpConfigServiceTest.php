@@ -21,5 +21,11 @@ final class IdpConfigServiceTest extends TestCase {
         self::assertNotFalse(openssl_pkey_get_private($this->service->getPrivateKey()));
         self::assertTrue($this->config->writeOptions['idp_private_key']['lazy']);
         self::assertTrue($this->config->writeOptions['idp_private_key']['sensitive']);
+        self::assertNotSame('', $this->service->getPersistentNameIdPepper());
+        self::assertTrue($this->config->writeOptions['persistent_nameid_pepper']['sensitive']);
+    }
+    public function testPersistentNameIdPepperIsNotCreatedInReadPath(): void {
+        $this->expectException(\RuntimeException::class);
+        $this->service->getPersistentNameIdPepper();
     }
 }

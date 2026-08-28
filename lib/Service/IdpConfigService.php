@@ -34,14 +34,12 @@ class IdpConfigService {
         return $this->appConfig->getValueString(Application::APP_ID, self::KEY_KEY, '', lazy: true);
     }
 
-    /** Returns a stable, installation-specific secret for privacy-preserving persistent NameIDs. */
+    /** Returns the installation secret created with the IdP keypair; this read path never writes. */
     public function getPersistentNameIdPepper(): string {
         $pepper = $this->appConfig->getValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, '', lazy: true);
-        if ($pepper !== '') {
-            return $pepper;
+        if ($pepper === '') {
+            throw new \RuntimeException('Persistent NameID pepper is not initialized; generate an IdP certificate first');
         }
-        $pepper = base64_encode(random_bytes(32));
-        $this->appConfig->setValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, $pepper, lazy: true, sensitive: true);
         return $pepper;
     }
 
@@ -129,6 +127,11 @@ CONF;
                 || !str_contains((string)($extensions['keyUsage'] ?? ''), 'Digital Signature')
                 || !self::privateKeyMatchesCertificate($keyOut, $certOut)) {
                 throw new \RuntimeException('Generated certificate does not meet the signing-key policy');
+            }
+            // The persistent NameID secret belongs to the IdP identity. Initialize it
+            // during explicit certificate setup, never lazily while serving a login.
+            if ($this->appConfig->getValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, '', lazy: true) === '') {
+                $this->appConfig->setValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, base64_encode(random_bytes(32)), lazy: true, sensitive: true);
             }
             $this->appConfig->setValueString(Application::APP_ID, self::KEY_CERT, $certOut);
             $this->appConfig->setValueString(Application::APP_ID, self::KEY_KEY, $keyOut, lazy: true, sensitive: true);

@@ -60,6 +60,7 @@ requireSignature('OCP\\IAppConfig', 'setValueString', ['app', 'key', 'value', 'l
 requireSignature('OCP\\IRequest', 'getParam', ['key', 'default'], null, $missing);
 requireSignature('OCP\\IRequest', 'getParams', [], 'array', $missing);
 requireSignature('OCP\\IRequest', 'getMethod', [], 'string', $missing);
+requireSignature('OCP\\Util', 'getL10N', ['appName'], 'OCP\\IL10N', $missing);
 foreach (['OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit', 'OCP\\AppFramework\\Http\\Attribute\\UserRateLimit'] as $attribute) {
     if (class_exists($attribute)) {
         requireSignature($attribute, '__construct', ['limit', 'period'], null, $missing);

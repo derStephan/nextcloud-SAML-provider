@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.39 - 2026-08-28
+
+- Prove `requireSignedRequests` through real valid unsigned and signed AuthnRequests for both SAML HTTP-Redirect and HTTP-POST bindings; remove the misleading shell string-split command.
+- Reject missing IssueInstant values, prevent signing with expired or unusable IdP credentials, initialize persistent NameID pepper during certificate setup, and add real IdP-initiated CSRF browser evidence.
+- Extend the public OCP inventory to templates and fully qualified OCP calls, document intentional interoperability limits, correct README release/audit claims, and state that unreleased 0.8.0 has no upgrade path.
+
 ## 0.8.38 - 2026-08-28
 
 - Establish `tests/TEST_CONTRACT.md` as the canonical, agent-readable Test Contract; keep it printed verbatim in every CI test log through a thin wrapper.

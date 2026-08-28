@@ -126,6 +126,9 @@ XML;
             throw new \InvalidArgumentException('SAMLRequest Destination does not match this IdP');
         }
         $issueInstant = $root->getAttribute('IssueInstant');
+        if ($issueInstant === '') {
+            throw new \InvalidArgumentException('SAMLRequest is missing IssueInstant');
+        }
         try {
             $issuedAt = new \DateTimeImmutable($issueInstant);
         } catch (\Exception) {
@@ -232,6 +235,11 @@ XML;
         ?string $inResponseTo,
         ?string $acsUrlOverride,
     ): string {
+        // Metadata and signing must use the same validity rule. Never issue a fresh
+        // response with an expired, malformed, or mismatched IdP keypair.
+        if (!$this->idpConfig->hasCertificate()) {
+            throw new \RuntimeException('IdP signing certificate is unavailable or expired');
+        }
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $notOnOrAfter = $now->modify('+5 minutes')->format('Y-m-d\TH:i:s\Z');
         $issueInstant = $now->format('Y-m-d\TH:i:s\Z');

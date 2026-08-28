@@ -12,6 +12,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\Attribute\AnonRateLimit;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\RedirectResponse;
@@ -116,6 +117,7 @@ class SamlController extends Controller {
      * never creates an assertion, preventing third-party login CSRF.
      */
     #[NoAdminRequired]
+    #[UserRateLimit(limit: 10, period: 60)]
     public function idpInitiated(int $spId): Http\Response {
         if (!$this->userSession->isLoggedIn()) {
             return new RedirectResponse(
@@ -142,6 +144,7 @@ class SamlController extends Controller {
 
     /** Creates an unsolicited assertion only after Nextcloud's CSRF middleware accepts the POST. */
     #[NoAdminRequired]
+    #[UserRateLimit(limit: 10, period: 60)]
     public function confirmIdpInitiated(int $spId): Http\Response {
         if (!$this->userSession->isLoggedIn()) {
             return new Http\Response(Http::STATUS_UNAUTHORIZED);

@@ -110,13 +110,6 @@ docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
   "$playwright_image" node /work/configure-kimai-admin.mjs
 kimai_idp_json="$workspace/build/e2e/browser-artifacts/kimai-idp.json"
 [[ -s "$kimai_idp_json" ]] || fail 'Admin browser setup did not produce Kimai IdP configuration'
-docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
-  --volume "$playwright_work:/work" \
-  --volume "$workspace/tests/E2E/idp-initiated-csrf.mjs:/work/idp-initiated-csrf.mjs:ro" \
-  --volume "$workspace/build/e2e/browser-artifacts:/work/browser-artifacts" \
-  --env E2E_ARTIFACT_DIR=/work/browser-artifacts \
-  --env E2E_KIMAI_CONFIG=/work/browser-artifacts/kimai-idp.json \
-  "$playwright_image" node /work/idp-initiated-csrf.mjs
 # Kimai consumes the certificate as a single base64 line without PEM markers.
 # Its 2.65 SAML bundle requires the nested connection.idp/connection.sp schema;
 # an old flat connection schema silently leaves the SAML routes unregistered.

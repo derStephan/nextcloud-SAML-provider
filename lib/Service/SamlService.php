@@ -235,8 +235,7 @@ XML;
         ?string $inResponseTo,
         ?string $acsUrlOverride,
     ): string {
-        // Metadata and signing must use the same validity rule. Never issue a fresh
-        // response with an expired, malformed, or mismatched IdP keypair.
+        // Metadata and response signing must share one certificate-validity policy.
         if (!$this->idpConfig->hasCertificate()) {
             throw new \RuntimeException('IdP signing certificate is unavailable or expired');
         }

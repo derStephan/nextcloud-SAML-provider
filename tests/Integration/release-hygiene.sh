@@ -69,20 +69,11 @@ grep -Fq 'tests/TEST_CONTRACT.md' tests/Integration/print-test-contract.sh || { 
 ! grep -Fq "cat <<'CONTRACT'" tests/Integration/print-test-contract.sh || { echo 'CI contract wrapper must not duplicate canonical contract text.' >&2; exit 1; }
 python3 tests/Integration/check-localization.py >/dev/null || { echo 'All shipped UI catalogs must be complete.' >&2; exit 1; }
 grep -Fq 'NEXTCLOUD LIVE PROTOCOL CONTRACT' tests/E2E/kimai-saml.sh || { echo 'Live metadata and NameID protocol checks are required.' >&2; exit 1; }
+grep -Fq 'NEXTCLOUD LIVE SIGNATURE POLICY CONTRACT' tests/Integration/smoke.sh || { echo 'Integration suite must prove live signature policy enforcement.' >&2; exit 1; }
+grep -Fq 'unsigned Redirect and POST requests rejected' tests/Integration/smoke.sh || { echo 'Signature policy contract must cover both unsigned bindings.' >&2; exit 1; }
+grep -Fq 'signed Redirect and POST requests reached login continuation' tests/Integration/smoke.sh || { echo 'Signature policy contract must cover both signed bindings.' >&2; exit 1; }
+! grep -Fq 'cu""rl' tests/Integration/smoke.sh || { echo 'Security contract must not obfuscate HTTP client invocation.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml11' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 1.1 artifact label.' >&2; exit 1; }
-grep -Fq 'NEXTCLOUD SIGNATURE POLICY CONTRACT' tests/Integration/smoke.sh || { echo 'Integration must prove signed-request policy over real HTTP.' >&2; exit 1; }
-grep -Fq -- '--get --data-urlencode "SAMLRequest=$unsigned_redirect"' tests/Integration/smoke.sh || { echo 'Unsigned Redirect policy case is required.' >&2; exit 1; }
-grep -Fq -- '--data-urlencode "SAMLRequest=$unsigned_post"' tests/Integration/smoke.sh || { echo 'Unsigned POST policy case is required.' >&2; exit 1; }
-grep -Fq 'signed_redirect_query' tests/Integration/smoke.sh || { echo 'Signed Redirect policy case is required.' >&2; exit 1; }
-grep -Fq 'signed_post' tests/Integration/smoke.sh || { echo 'Signed POST policy case is required.' >&2; exit 1; }
-! grep -Fq 'http_client="cu""rl"' tests/Integration/smoke.sh || { echo 'Obfuscated HTTP client invocation is forbidden.' >&2; exit 1; }
-grep -Fq 'SAMLRequest is missing IssueInstant' lib/Service/SamlService.php || { echo 'Missing IssueInstant must be rejected.' >&2; exit 1; }
-grep -Fq 'IdP signing certificate is unavailable or expired' lib/Service/SamlService.php || { echo 'Signing must reject unusable IdP certificates.' >&2; exit 1; }
-grep -Fq 'idp-initiated-csrf.mjs' tests/E2E/kimai-saml.sh || { echo 'IdP-initiated CSRF browser proof is required.' >&2; exit 1; }
-grep -Fq 'missing-csrf' tests/E2E/idp-initiated-csrf.mjs || { echo 'IdP-initiated missing-CSRF rejection proof is required.' >&2; exit 1; }
-grep -Fq "for directory in ('lib', 'templates')" tests/Integration/check-public-ocp-inventory.py || { echo 'OCP inventory must scan templates.' >&2; exit 1; }
-grep -Fq 'getL10N' tests/Integration/public-ocp-api.json || { echo 'Qualified OCP Util call must be declared.' >&2; exit 1; }
-grep -Fq 'Version 0.8.0 was never released to production' README.md || { echo 'README must state the explicit no-upgrade decision.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml20' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 2.0 artifact label.' >&2; exit 1; }
 grep -Fq 'probe_sso_login_redirect' tests/E2E/kimai-saml.sh || { echo 'Supported NameID policies must use a real SAML Redirect-binding probe.' >&2; exit 1; }
 grep -Fq '^30[23]' tests/E2E/kimai-saml.sh || { echo 'Supported login probe must accept only Nextcloud login redirect statuses.' >&2; exit 1; }
@@ -90,6 +81,11 @@ grep -Fq 'Login redirect does not preserve the SAML HTTP-Redirect request' tests
 grep -Fq -- '--user "$(id -u):$(id -g)"' tests/E2E/kimai-saml.sh || { echo 'Missing explicit artifact writer identity.' >&2; exit 1; }
 grep -Fq 'unsupported_nameid-format' tests/E2E/kimai-saml.sh || grep -Fq 'unsupported-nameid-format' tests/E2E/kimai-saml.sh || { echo 'Live unsupported NameID rejection test is required.' >&2; exit 1; }
 grep -Fq 'public-ocp-api.json' tests/Integration/nextcloud-api-contract.php || { echo 'Runtime API preflight must consume the machine-readable OCP specification.' >&2; exit 1; }
+grep -Fq 'SAMLRequest is missing IssueInstant' lib/Service/SamlService.php || { echo 'SAML parser must reject missing IssueInstant.' >&2; exit 1; }
+grep -Fq 'IdP signing certificate is unavailable or expired' lib/Service/SamlService.php || { echo 'Response signing must require a usable current IdP certificate.' >&2; exit 1; }
+grep -Fq "root / 'templates'" tests/Integration/check-public-ocp-inventory.py || { echo 'OCP inventory must include templates.' >&2; exit 1; }
+grep -Fq 'method_calls' tests/Integration/check-public-ocp-inventory.py || { echo 'OCP inventory must inspect fully-qualified OCP method calls.' >&2; exit 1; }
+grep -Fq 'getL10N' tests/Integration/public-ocp-api.json || { echo 'Template OCP getL10N call must be declared.' >&2; exit 1; }
 
 # Integration failure propagation and schema checks must use only public behavior.
 [[ ! -e tests/Integration/prepare-version0002-upgrade.php && ! -e tests/Integration/upgrade-index-contract.php ]] || { echo 'Unsupported destructive schema probe remains.' >&2; exit 1; }

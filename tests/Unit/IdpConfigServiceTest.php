@@ -22,9 +22,11 @@ final class IdpConfigServiceTest extends TestCase {
         self::assertTrue($this->config->writeOptions['idp_private_key']['lazy']);
         self::assertTrue($this->config->writeOptions['idp_private_key']['sensitive']);
         self::assertNotSame('', $this->service->getPersistentNameIdPepper());
+        self::assertTrue($this->config->writeOptions['persistent_nameid_pepper']['lazy']);
         self::assertTrue($this->config->writeOptions['persistent_nameid_pepper']['sensitive']);
     }
-    public function testPersistentNameIdPepperIsNotCreatedInReadPath(): void {
+
+    public function testRejectsUnavailablePersistentNameIdPepperWithoutWritingDuringRead(): void {
         $this->expectException(\RuntimeException::class);
         $this->service->getPersistentNameIdPepper();
     }

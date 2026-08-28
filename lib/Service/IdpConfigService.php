@@ -11,6 +11,7 @@ class IdpConfigService {
     private const KEY_CERT = 'idp_certificate';
     private const KEY_KEY  = 'idp_private_key';
     private const KEY_NAMEID_PEPPER = 'persistent_nameid_pepper';
+    private ?bool $usableCertificate = null;
 
     public function __construct(
         private IAppConfig $appConfig,
@@ -34,23 +35,33 @@ class IdpConfigService {
         return $this->appConfig->getValueString(Application::APP_ID, self::KEY_KEY, '', lazy: true);
     }
 
-    /** Returns the installation secret created with the IdP keypair; this read path never writes. */
+    /** Returns a stable, installation-specific secret for privacy-preserving persistent NameIDs. */
     public function getPersistentNameIdPepper(): string {
         $pepper = $this->appConfig->getValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, '', lazy: true);
-        if ($pepper === '') {
-            throw new \RuntimeException('Persistent NameID pepper is not initialized; generate an IdP certificate first');
+        if ($pepper !== '') {
+            return $pepper;
         }
-        return $pepper;
+        // New installations persist this secret during certificate setup. For a legacy
+        // keypair without that value, derive a stable in-memory fallback instead of
+        // writing configuration on a login path; this avoids a first-login race.
+        $privateKey = $this->getPrivateKey();
+        if ($privateKey === '') {
+            throw new \RuntimeException('Persistent NameID pepper is unavailable; generate an IdP certificate first');
+        }
+        return base64_encode(hash_hmac('sha256', 'saml-provider:persistent-nameid:v1', $privateKey, true));
     }
 
     /** A usable IdP keypair must be parseable, private, and currently valid. */
     public function hasCertificate(): bool {
+        if ($this->usableCertificate !== null) {
+            return $this->usableCertificate;
+        }
         $certificate = $this->getCertificate();
         $privateKey = $this->getPrivateKey();
         if ($certificate === '' || $privateKey === '' || !self::certificateIsCurrentlyValid($certificate)) {
-            return false;
+            return $this->usableCertificate = false;
         }
-        return self::privateKeyMatchesCertificate($privateKey, $certificate);
+        return $this->usableCertificate = self::privateKeyMatchesCertificate($privateKey, $certificate);
     }
 
     /** Validate time window and mandatory signing-only X.509 extensions. */
@@ -128,13 +139,13 @@ CONF;
                 || !self::privateKeyMatchesCertificate($keyOut, $certOut)) {
                 throw new \RuntimeException('Generated certificate does not meet the signing-key policy');
             }
-            // The persistent NameID secret belongs to the IdP identity. Initialize it
-            // during explicit certificate setup, never lazily while serving a login.
+            $this->appConfig->setValueString(Application::APP_ID, self::KEY_CERT, $certOut);
+            $this->appConfig->setValueString(Application::APP_ID, self::KEY_KEY, $keyOut, lazy: true, sensitive: true);
+            // NameID stability belongs to the same installation identity as this keypair.
             if ($this->appConfig->getValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, '', lazy: true) === '') {
                 $this->appConfig->setValueString(Application::APP_ID, self::KEY_NAMEID_PEPPER, base64_encode(random_bytes(32)), lazy: true, sensitive: true);
             }
-            $this->appConfig->setValueString(Application::APP_ID, self::KEY_CERT, $certOut);
-            $this->appConfig->setValueString(Application::APP_ID, self::KEY_KEY, $keyOut, lazy: true, sensitive: true);
+            $this->usableCertificate = true;
         } finally {
             @unlink($configFile);
         }

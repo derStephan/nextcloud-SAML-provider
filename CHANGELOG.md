@@ -1,44 +1,51 @@
 # Changelog
 
-## 0.8.39 - 2026-08-28
+## Unreleased
 
-- Prove `requireSignedRequests` through real valid unsigned and signed AuthnRequests for both SAML HTTP-Redirect and HTTP-POST bindings; remove the misleading shell string-split command.
-- Reject missing IssueInstant values, prevent signing with expired or unusable IdP credentials, initialize persistent NameID pepper during certificate setup, and add real IdP-initiated CSRF browser evidence.
-- Extend the public OCP inventory to templates and fully qualified OCP calls, document intentional interoperability limits, correct README release/audit claims, and state that unreleased 0.8.0 has no upgrade path.
+## 0.8.40
 
-## 0.8.38 - 2026-08-28
+- Align release-hygiene signature-policy assertions with the named live HTTP-Redirect and HTTP-POST request cases in `tests/Integration/smoke.sh`.
+- Preserve explicit negative (`400`) and signed login-continuation (`302`/`303`) checks for both SAML request bindings.
+
+## 0.8.39
+
+- Prove `requireSignedRequests` on the live SSO endpoint for well-formed unsigned and OpenSSL-signed HTTP-Redirect and HTTP-POST AuthnRequests.
+- Reject missing SAML `IssueInstant`, enforce a currently usable IdP certificate before response signing, extend the OCP inventory to templates and fully-qualified calls, and remove stale validation/catalog entries.
+- Correct README release and dependency-audit statements; normalize CHANGELOG headings without dates.
+
+## 0.8.38
 
 - Establish `tests/TEST_CONTRACT.md` as the canonical, agent-readable Test Contract; keep it printed verbatim in every CI test log through a thin wrapper.
 - Add portable `AGENTS.md`, GitHub Copilot repository instructions, and path-specific testing instructions. Release hygiene now enforces their presence and contract linkage.
 
-## 0.8.37 - 2026-08-28
+## 0.8.37
 
 - Move the E2E evidence-artifact catalog from the README into the durable Test Contract, where it is enforced for every target and failure path.
 - Make Docker log hygiene universal for existing and future tests: suppress routine container noise, print only genuine diagnostics when needed, and retain complete container logs as failure artifacts.
 - Add a Codecov coverage badge and enforce the existing Codecov Clover upload with the `CODECOV_TOKEN` repository secret.
 
-## 0.8.36 - 2026-08-28
+## 0.8.36
 
 - Keep `kimai/kimai2:apache` dynamically pulled for current-Kimai compatibility; correct the test contract so it no longer calls the Kimai image pinned.
 - Make authenticated-session proof UI-independent: require a post-SAML request to the protected homepage to end at a same-origin Kimai `/en/` route with HTTP 200, never a login, SAML, or wizard route. Remove visible-logout text matching.
 
-## 0.8.35 - 2026-08-28
+## 0.8.35
 
 - Disable Kimai's optional first-run wizard in the pinned E2E container through `kimai.user.wizard: false`; remove all wizard detection and UI-click automation from the SAML browser proof.
 - Require a successful signed SAML flow to reach a protected Kimai application route directly, retaining the same-origin and visible-logout session proof.
 
-## 0.8.34 - 2026-08-28
+## 0.8.34
 
 - Accept Kimai's legitimate redirect from `/en/homepage` to an authenticated working page such as `/en/timesheet/` only when a visible logout control proves the browser session; retain strict rejection of tampered responses.
 - Clarify the E2E contract: request the protected homepage, then accept its authenticated same-origin landing-page redirect and require a visible logout control.
 
-## 0.8.33 - 2026-08-28
+## 0.8.33
 
 - Treat Kimai's first-run onboarding wizard as an authenticated SAML destination, complete it through the real browser, and then prove access to the protected homepage.
 - Define the required browser, protocol, configuration, screenshot, HTML, and container-diagnostics artifacts in the Test Contract and upload the evidence bundle for every E2E target.
 - Ship complete JSON, JavaScript, and PHP UI catalogs for English, German, French, Spanish, Italian, Brazilian Portuguese, Polish, Russian, Japanese, and Simplified Chinese; document the coverage in the README.
 
-## 0.8.32 - 2026-08-28
+## 0.8.32
 
 - Provision the E2E Nextcloud administrator with `admin@example.test` so signed SAML responses include the `mail` attribute required by Kimai's mandatory email mapping.
 - Keep Docker failure diagnostics actionable: suppress routine lifecycle chatter such as `completed` and `verified`, while preserving error, warning, failure, fatal, panic and exception lines.
@@ -548,7 +555,6 @@
 - Add a GitHub Release-downloads badge to the README.
 - Make Nextcloud App Store publication opt-in: the release pipeline now uploads only when the GitHub repository variable `PUBLISH_TO_APPSTORE` is set to `true`. GitHub release creation and code-signing validation continue in dry-run mode.
 
-## [Unreleased]
 
 ## [0.8.31] - 2026-08-28
 

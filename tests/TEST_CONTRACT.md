@@ -19,6 +19,8 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    PHPUnit must remain compatible with all selected PHP versions (currently ^11.5).
    Enforce at least 80% production statement coverage for lib/ from Clover data as a
    hard gate: the coverage check must exit non-zero and fail the workflow below 80%.
+   Every production OCP import and fully-qualified OCP method call, including templates,
+   must be declared in the machine-readable inventory and reflection-probed on every target.
 2. Nextcloud integration tests: discover every maintained Nextcloud major release
    at runtime from endoflife.date (minimum supported major: 33), then add the newest
    available official Apache RC or beta image from Docker Hub. Run every target with
@@ -51,11 +53,13 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    Assertion, the positive flow must reach a protected Kimai page, and a browser-tampered
    signed response must not establish that session. Exercise SAML 1.1 and 2.0 unspecified
    NameIDPolicy URNs against the running SSO endpoint and prove an unsupported policy is
-   HTTP 400. Reject a missing or invalid IssueInstant. After certificate generation, prove
-   metadata through its public HTTP endpoint: 200, correct content type, well-formed XML,
-   entity ID, SSO URL, and certificate. Never sign a response with an expired or unusable
-   IdP certificate. Require signed AuthnRequests to be proven with valid XML and real
-   positive/negative HTTP-Redirect and HTTP-POST signature cases.
+   HTTP 400. Prove `requireSignedRequests` against the live SSO endpoint separately for
+   HTTP-Redirect and HTTP-POST: each binding must reject a well-formed unsigned request
+   and continue a correctly OpenSSL-signed request to the real Nextcloud login redirect.
+   After certificate generation, prove metadata through its public HTTP endpoint: 200,
+   correct content type, well-formed XML, entity ID, SSO URL, and certificate. Missing
+   IssueInstant and unavailable/expired IdP signing certificates must be rejected before
+   response signing.
 6. Toolchain floor: PHP >=8.2; PHPUnit ^11.5; Node.js 24 in the pinned Playwright
    image; npm 12.0.2; Playwright 1.62.1. Keep versions explicit and compatible.
 7. CI hygiene and evidence: use actions/upload-artifact@v6 or later (Node 24 runtime).
@@ -67,9 +71,7 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    log output. Every E2E target must retain machine-readable negative, positive, and
    tampered browser traces; terminal screenshots and bounded HTML; Kimai IdP settings;
    metadata, login headers, NameID request/response artifacts, E2E context, and a
-   populated Nextcloud SAML admin screenshot after success. Retain IdP-initiated CSRF
-   evidence: POST without requesttoken rejected and browser confirmation with a real token
-   producing a SAMLResponse. On failure additionally
+   populated Nextcloud SAML admin screenshot after success. On failure additionally
    retain docker-ps and full Nextcloud, Kimai, and MariaDB logs. Artifact names must
    include target and run. Upload Clover coverage to Codecov using the repository secret
    `CODECOV_TOKEN` and display the Codecov coverage badge in the README. Every successful

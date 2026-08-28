@@ -37,6 +37,8 @@ jobs:
           - { label: PostgreSQL, driver: pgsql }
     steps:
       - uses: actions/checkout@v5
+      - name: Print durable test contract
+        run: bash tests/Integration/print-test-contract.sh
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
       - run: docker network create nextcloud-integration

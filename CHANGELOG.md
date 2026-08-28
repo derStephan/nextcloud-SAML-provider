@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.15
+
+### CI and E2E resilience
+
+- Restore dynamic maintained-Nextcloud plus newest RC/beta discovery for integration and Kimai browser E2E matrices.
+- Print a durable English test contract in CI logs and suppress non-actionable Docker layer progress.
+- Retry the strict Kimai SAML metadata contract until its public route is fully initialized.
+
 ## 0.8.5
 
 ### Security and audit remediation

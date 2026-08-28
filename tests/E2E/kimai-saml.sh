@@ -12,10 +12,22 @@ cleanup(){
 }
 trap cleanup EXIT
 fail(){ echo "E2E failure: $*" >&2; exit 1; }
+pull_image_quietly(){
+  local image="$1" pull_log
+  pull_log="$(mktemp)"
+  if ! docker pull --quiet "$image" >"$pull_log" 2>&1; then
+    echo "Failed to pull required container image: $image" >&2
+    cat "$pull_log" >&2
+    rm -f "$pull_log"
+    fail "Container image pull failed: $image"
+  fi
+  rm -f "$pull_log"
+  echo "Container image ready: $image"
+}
 wait_http(){
   local url="$1" name="$2" status
   for attempt in $(seq 1 90); do
-    status="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --output /dev/null --write-out '%{http_code}' "$url" || true)"
+    status="$(docker run --rm --network "$network" "$curl_image" --silent --output /dev/null --write-out '%{http_code}' "$url" || true)"
     # Kimai correctly redirects anonymous requests (302) to its login page. Readiness
     # means the application answered; endpoint-specific assertions below remain strict.
     if [[ "$status" =~ ^[123][0-9]{2}$ ]]; then return 0; fi
@@ -24,8 +36,18 @@ wait_http(){
   docker logs "$name" >&2 || true
   fail "Timed out waiting for $url (last HTTP status: ${status:-none})"
 }
+bash "$workspace/tests/Integration/print-test-contract.sh"
+# Pull every image before it is first run. Quiet pulls prevent Docker layer-progress
+# noise from obscuring useful test diagnostics.
+curl_image="${CURL_IMAGE:-curlimages/curl:8.10.1}"
+nextcloud_image="${NEXTCLOUD_IMAGE:-nextcloud:34-apache}"
+kimai_image="${KIMAI_IMAGE:-kimai/kimai2:apache}"
+mariadb_image="${MARIADB_IMAGE:-mariadb:11.4}"
+playwright_image="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
+for image in "$curl_image" "$nextcloud_image" "$mariadb_image" "$kimai_image" "$playwright_image"; do pull_image_quietly "$image"; done
+
 docker network create "$network" >/dev/null
-docker run -d --name "$nextcloud" --network "$network" -v "$workspace:/var/www/html/custom_apps/saml_provider:ro" "${NEXTCLOUD_IMAGE:-nextcloud:34-apache}" >/dev/null
+docker run -d --name "$nextcloud" --network "$network" -v "$workspace:/var/www/html/custom_apps/saml_provider:ro" "$nextcloud_image" >/dev/null
 wait_http http://e2e-nextcloud/status.php "$nextcloud"
 docker exec --user www-data "$nextcloud" php occ maintenance:install --database sqlite --database-name nextcloud --admin-user admin --admin-pass integration-test-password --data-dir /var/www/html/data >/dev/null
 # Disable Nextcloud's first-run wizard in this ephemeral test instance before any browser login.
@@ -49,8 +71,6 @@ printf 'Kimai E2E diagnostics initialized for %s\n' "${NEXTCLOUD_IMAGE:-nextclou
 # Drive the entire user journey in a real browser. No Nextcloud login HTML,
 # CSRF representation, form action, or SAML POST form is parsed or replayed.
 # Pull before the trace marker: the marker now denotes the actual browser test.
-playwright_image="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
-docker pull "$playwright_image"
 mkdir -p "$workspace/build/e2e/browser-artifacts"
 # The browser image supplies browsers and OS dependencies, but no importable
 # project module. Prepare the matching Node package in a temporary work directory.
@@ -95,17 +115,26 @@ kimai:
       username: Email
       roles: []
 YAML
-docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password mariadb:11.4 >/dev/null
+docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password "$mariadb_image" >/dev/null
 for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
-docker run -d --name "$kimai" --network "$network" -e 'DATABASE_URL=mysql://kimai:kimai@e2e-mariadb:3306/kimai?charset=utf8mb4&serverVersion=11.4.0-MariaDB' -e APP_SECRET=kimai-e2e-only -e TRUSTED_HOSTS='e2e-kimai|localhost|127\\.0\\.0\\.1' -e TRUSTED_PROXIES='127.0.0.1,172.16.0.0/12' -v "$workspace/build/e2e/kimai-local.yaml:/opt/kimai/config/packages/local.yaml:ro" "${KIMAI_IMAGE:-kimai/kimai2:apache}" >/dev/null
+docker run -d --name "$kimai" --network "$network" -e 'DATABASE_URL=mysql://kimai:kimai@e2e-mariadb:3306/kimai?charset=utf8mb4&serverVersion=11.4.0-MariaDB' -e APP_SECRET=kimai-e2e-only -e TRUSTED_HOSTS='e2e-kimai|localhost|127\\.0\\.0\\.1' -e TRUSTED_PROXIES='127.0.0.1,172.16.0.0/12' -v "$workspace/build/e2e/kimai-local.yaml:/opt/kimai/config/packages/local.yaml:ro" "$kimai_image" >/dev/null
 wait_http http://e2e-kimai:8001/ "$kimai"
-kimai_metadata_response="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --write-out $'\n%{http_code}' http://e2e-kimai:8001/auth/saml/metadata)" || fail 'Could not contact Kimai SAML metadata endpoint'
-kimai_metadata_status="${kimai_metadata_response##*$'\n'}"
-metadata="${kimai_metadata_response%$'\n'*}"
-printf '%s' "$metadata" > build/e2e/browser-artifacts/kimai-saml-metadata-response.txt
-[[ "$kimai_metadata_status" =~ ^2[0-9][0-9]$ ]] || fail 'Kimai SAML metadata endpoint did not return success'
-printf '%s' "$metadata" | grep -Fq 'http://e2e-kimai:8001/auth/saml/acs' || fail 'Kimai metadata does not advertise its expected ACS URL'
-kimai_login_headers="$(docker run --rm --network "$network" curlimages/curl:8.10.1 --silent --show-error --head http://e2e-kimai:8001/auth/saml/login)" || fail 'Could not contact Kimai SAML login endpoint'
+# The root route can answer before Kimai has finished warming the SAML subsystem.
+# Retry the exact public metadata contract, not merely the root readiness endpoint.
+kimai_metadata_status='none'
+metadata=''
+for attempt in $(seq 1 60); do
+  kimai_metadata_response="$(docker run --rm --network "$network" "$curl_image" --silent --show-error --write-out $'\n%{http_code}' http://e2e-kimai:8001/auth/saml/metadata)" || true
+  kimai_metadata_status="${kimai_metadata_response##*$'\n'}"
+  metadata="${kimai_metadata_response%$'\n'*}"
+  printf '%s' "$metadata" > build/e2e/browser-artifacts/kimai-saml-metadata-response.txt
+  if [[ "$kimai_metadata_status" =~ ^2[0-9][0-9]$ ]] && printf '%s' "$metadata" | grep -Fq 'http://e2e-kimai:8001/auth/saml/acs'; then
+    break
+  fi
+  [[ "$attempt" == 60 ]] && { docker logs "$kimai" >&2 || true; fail "Kimai SAML metadata contract did not become ready (last HTTP status: $kimai_metadata_status)"; }
+  sleep 2
+done
+kimai_login_headers="$(docker run --rm --network "$network" "$curl_image" --silent --show-error --head http://e2e-kimai:8001/auth/saml/login)" || fail 'Could not contact Kimai SAML login endpoint'
 printf '%s\n' "$kimai_login_headers" > build/e2e/browser-artifacts/kimai-saml-login-headers.txt
 printf '%s\n' "$kimai_login_headers" | grep -Eiq '^location: http://e2e-nextcloud/' || fail 'Kimai SAML login endpoint has no expected Nextcloud redirect'
 echo 'KIMAI SAML HTTP PREFLIGHT: PASSED. Metadata is valid and login redirects to the admin-configured Nextcloud IdP.'

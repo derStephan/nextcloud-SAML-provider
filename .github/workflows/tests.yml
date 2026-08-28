@@ -43,6 +43,8 @@ jobs:
         php: ${{ fromJSON(needs.supported-php-versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@v5
+      - name: Print durable test contract
+        run: bash tests/Integration/print-test-contract.sh
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}

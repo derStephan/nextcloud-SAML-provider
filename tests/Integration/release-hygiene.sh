@@ -45,7 +45,10 @@ grep -Fq 'wantAssertionsSigned: true' tests/E2E/kimai-saml.sh || { echo 'Kimai E
 grep -Fq 'wantMessagesSigned: true' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must require signed responses.' >&2; exit 1; }
 grep -Fq 'run_browser tampered' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must reject a tampered response.' >&2; exit 1; }
 grep -Fq 'isProtectedKimai' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must prove a protected authenticated session.' >&2; exit 1; }
-grep -Fq 'isKimaiWizard' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must handle authenticated first-run onboarding.' >&2; exit 1; }
+grep -Fq 'wizard: false' tests/E2E/kimai-saml.sh || { echo 'Dynamic Kimai E2E container must disable its optional first-run wizard.' >&2; exit 1; }
+! grep -Fq 'isKimaiWizard' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must not automate unrelated first-run wizard UI.' >&2; exit 1; }
+grep -Fq 'requestProtectedKimaiPage' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must prove a protected route through HTTP semantics.' >&2; exit 1; }
+! grep -Fq 'hasVisibleLogout' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E session proof must not depend on UI labels.' >&2; exit 1; }
 grep -Fq 'Upload SAML protocol and browser evidence' .github/workflows/kimai-saml-e2e.yml || { echo 'Kimai E2E must upload protocol and browser evidence for every run.' >&2; exit 1; }
 grep -Fq 'On failure additionally retain docker-ps' tests/Integration/print-test-contract.sh || { echo 'Test Contract must define failure diagnostics artifacts.' >&2; exit 1; }
 grep -Fq 'browser-flow traces for negative, positive, and tampered sessions' tests/Integration/print-test-contract.sh || { echo 'Test Contract must define browser-flow artifacts.' >&2; exit 1; }

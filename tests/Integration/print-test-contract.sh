@@ -28,8 +28,12 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    dynamically discovered Nextcloud target. Configure the IdP only through the real
    Nextcloud admin UI; do not use SQL fixtures or direct app-config writes.
 4. E2E setup and evidence: disable Nextcloud firstrunwizard before browser login.
-   A fresh Kimai SAML user may receive Kimai's first-run wizard; complete it through the
-   real browser and then prove a protected Kimai homepage. For every target, retain
+   Pull the current Kimai image dynamically and set `kimai.user.wizard: false`; do not
+   automate Kimai's unrelated first-run setup UI. Request the protected Kimai homepage
+   and prove that its final redirect target is a same-origin `/en/` application route
+   returning HTTP 200, never a login, SAML, or wizard route. Kimai may redirect the
+   homepage to a configured working page such as /en/timesheet/. Do not use visible
+   labels, CSS classes, branding, or DOM structure as the authentication proof. For every target, retain
    machine-readable browser-flow traces for negative, positive, and tampered sessions;
    screenshots and bounded HTML snapshots for each terminal state; Kimai IdP settings;
    Nextcloud metadata and Kimai login-response headers; SSO request/response headers and

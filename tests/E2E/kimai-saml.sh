@@ -217,6 +217,10 @@ probe_sso_rejection unsupported-nameid "$unsupported_xml"
 echo 'NEXTCLOUD LIVE PROTOCOL CONTRACT: persisted service, metadata, supported unspecified NameID formats, and unsupported NameID rejection passed.'
 cat > build/e2e/kimai-local.yaml <<YAML
 kimai:
+  # This dynamically pulled image has unrelated new-user onboarding; disable it so
+  # browser evidence remains focused on the SAML authentication contract.
+  user:
+    wizard: false
   saml:
     provider: nextcloud
     activate: true

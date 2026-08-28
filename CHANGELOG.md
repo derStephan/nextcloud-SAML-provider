@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.36 - 2026-08-28
+
+- Keep `kimai/kimai2:apache` dynamically pulled for current-Kimai compatibility; correct the test contract so it no longer calls the Kimai image pinned.
+- Make authenticated-session proof UI-independent: require a post-SAML request to the protected homepage to end at a same-origin Kimai `/en/` route with HTTP 200, never a login, SAML, or wizard route. Remove visible-logout text matching.
+
+## 0.8.35 - 2026-08-28
+
+- Disable Kimai's optional first-run wizard in the pinned E2E container through `kimai.user.wizard: false`; remove all wizard detection and UI-click automation from the SAML browser proof.
+- Require a successful signed SAML flow to reach a protected Kimai application route directly, retaining the same-origin and visible-logout session proof.
+
+## 0.8.34 - 2026-08-28
+
+- Accept Kimai's legitimate redirect from `/en/homepage` to an authenticated working page such as `/en/timesheet/` only when a visible logout control proves the browser session; retain strict rejection of tampered responses.
+- Clarify the E2E contract: request the protected homepage, then accept its authenticated same-origin landing-page redirect and require a visible logout control.
+
 ## 0.8.33 - 2026-08-28
 
 - Treat Kimai's first-run onboarding wizard as an authenticated SAML destination, complete it through the real browser, and then prove access to the protected homepage.

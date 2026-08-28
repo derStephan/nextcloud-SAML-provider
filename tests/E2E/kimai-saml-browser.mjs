@@ -33,28 +33,22 @@ async function snapshot(name) {
   await writeFile(`${artifactDirectory}/${name}.html`, html.slice(0, 200_000));
   note('snapshot', { name, url: page.url(), title });
 }
-const isProtectedKimai = (url) => url.origin === expectedKimaiOrigin && url.pathname === '/en/homepage';
-const isKimaiWizard = (url) => url.origin === expectedKimaiOrigin && url.pathname.startsWith('/en/wizard/');
-
-async function completeKimaiWizardIfShown() {
-  for (let step = 0; step < 8 && isKimaiWizard(new URL(page.url())); step += 1) {
-    note('kimai-onboarding-wizard', { step, url: page.url() });
-    await snapshot(`kimai-onboarding-wizard-${step}`);
-    const action = page.locator('a.btn-primary, button.btn-primary, input.btn-primary, a:has-text("Next"), button:has-text("Next"), a:has-text("Finish"), button:has-text("Finish")').first();
-    if (!await action.isVisible().catch(() => false)) {
-      throw new Error(`Kimai onboarding wizard is visible but has no actionable Next or Finish control: ${page.url()}`);
-    }
-    await action.click();
-    // Kimai may render the next wizard stage with a redirect or an in-place response.
-    // The next loop evaluates the actual URL and visible controls rather than assuming
-    // which transport mechanism the current Kimai release uses.
-    await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.waitForTimeout(250);
-  }
-  if (isKimaiWizard(new URL(page.url()))) {
-    throw new Error(`Kimai onboarding wizard did not finish after eight browser steps: ${page.url()}`);
-  }
+// Kimai may redirect /en/homepage to a configured working page such as
+// /en/timesheet/. Prove authentication via transport semantics rather than its UI:
+// final same-origin /en/ application route plus HTTP 200 after all redirects.
+const isProtectedKimai = (url) => url.origin === expectedKimaiOrigin
+  && url.pathname.startsWith('/en/')
+  && !url.pathname.startsWith('/en/wizard/')
+  && !url.pathname.startsWith('/en/login');
+async function requestProtectedKimaiPage() {
+  const response = await page.goto(protectedKimaiUrl, { waitUntil: 'domcontentloaded' });
+  const finalUrl = new URL(page.url());
+  const status = response?.status() ?? null;
+  const authenticated = isProtectedKimai(finalUrl) && status === 200;
+  note('protected-kimai-page-request', { requestedUrl: protectedKimaiUrl, finalUrl: page.url(), status, authenticated });
+  return authenticated;
 }
+
 
 if (mode === 'tampered') {
   await page.route('**/auth/saml/acs', async (route) => {
@@ -100,21 +94,17 @@ try {
   } else if (mode === 'tampered') {
     await page.waitForTimeout(3_000);
     if (!tamperedPostObserved || acsStatus === null) throw new Error('The tampered SAMLResponse did not reach Kimai ACS.');
-    if (isProtectedKimai(new URL(page.url()))) throw new Error(`Kimai accepted a tampered SAMLResponse and established a protected session: ${page.url()}`);
-    await page.goto(protectedKimaiUrl, { waitUntil: 'domcontentloaded' });
-    if (isProtectedKimai(new URL(page.url()))) throw new Error('Kimai retained an authenticated session after rejecting a tampered SAMLResponse.');
+    if (await requestProtectedKimaiPage()) throw new Error('Kimai retained an authenticated session after rejecting a tampered SAMLResponse.');
     note('tampered-saml-response-rejected', { acsStatus, finalUrl: page.url() });
     await snapshot('tampered-saml-response-rejected');
   } else {
-    // A fresh Kimai instance legitimately opens its first-run wizard after ACS.
-    // It is authenticated state, not a SAML failure; complete it in the browser and
-    // then demand the same protected homepage that a returning user receives.
-    await page.waitForURL((url) => isProtectedKimai(url) || isKimaiWizard(url), { timeout: 45_000 });
+    // The dynamically pulled Kimai image disables its optional first-run wizard via
+    // kimai.user.wizard: false. A successful SAML flow must reach a protected route
+    // directly; Kimai may choose a user-specific landing page such as the timesheet.
+    await page.waitForURL((url) => isProtectedKimai(url), { timeout: 45_000 });
     if (acsStatus === null || acsStatus < 300 || acsStatus >= 400) throw new Error(`Kimai did not accept the signed SAML POST with a redirect (ACS status: ${acsStatus ?? 'not observed'}).`);
-    await completeKimaiWizardIfShown();
-    await page.goto(protectedKimaiUrl, { waitUntil: 'domcontentloaded' });
-    if (!isProtectedKimai(new URL(page.url()))) throw new Error(`SAML login did not establish a protected Kimai session: ${page.url()}`);
-    note('kimai-signed-saml-authenticated', { acsStatus, authenticatedUrl: page.url() });
+    if (!await requestProtectedKimaiPage()) throw new Error(`SAML login did not establish a protected Kimai HTTP 200 application session: ${page.url()}`);
+    note('kimai-signed-saml-authenticated', { acsStatus, authenticatedUrl: page.url(), protectedHttpStatus: 200 });
     await snapshot('kimai-authenticated');
   }
 } catch (error) {

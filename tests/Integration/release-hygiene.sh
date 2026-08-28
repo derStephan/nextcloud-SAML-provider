@@ -38,9 +38,17 @@ grep -Fq 'php tests/check-coverage.php build/coverage/clover.xml 80' composer.js
 grep -Fq 'name: Enforce minimum 80% production statement coverage (blocking)' .github/workflows/tests.yml || { echo 'Unit workflow must include the named blocking coverage gate.' >&2; exit 1; }
 grep -Fq 'run: composer test:coverage' .github/workflows/tests.yml || { echo 'Unit workflow must run the blocking coverage command.' >&2; exit 1; }
 
-python3 tests/Integration/kimai-certificate-normalization-test.py
-python3 tests/Integration/kimai-browser-login-selector-test.py
-python3 tests/Integration/kimai-nameid-and-redirect-test.py
+# Static source checks are intentionally not executed as functional evidence here.
+# Their corresponding requirements are asserted against live Nextcloud/Kimai flows.
+grep -Fq 'check-public-ocp-inventory.py' tests/Integration/public-api-preflight.sh || { echo 'Every production OCP import must be declared in the runtime API contract.' >&2; exit 1; }
+grep -Fq 'wantAssertionsSigned: true' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must require signed assertions.' >&2; exit 1; }
+grep -Fq 'wantMessagesSigned: true' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must require signed responses.' >&2; exit 1; }
+grep -Fq 'run_browser tampered' tests/E2E/kimai-saml.sh || { echo 'Kimai E2E must reject a tampered response.' >&2; exit 1; }
+grep -Fq 'isProtectedKimai' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2E must prove a protected authenticated session.' >&2; exit 1; }
+grep -Fq 'NEXTCLOUD LIVE PROTOCOL CONTRACT' tests/E2E/kimai-saml.sh || { echo 'Live metadata and NameID protocol checks are required.' >&2; exit 1; }
+grep -Fq 'unsupported_nameid-format' tests/E2E/kimai-saml.sh || grep -Fq 'unsupported-nameid-format' tests/E2E/kimai-saml.sh || { echo 'Live unsupported NameID rejection test is required.' >&2; exit 1; }
+grep -Fq 'public-ocp-api.json' tests/Integration/nextcloud-api-contract.php || { echo 'Runtime API preflight must consume the machine-readable OCP specification.' >&2; exit 1; }
+grep -Fq 'fetchAssociative' tests/Integration/upgrade-index-contract.php || { echo 'Migration contract must use the documented public cursor fetch API.' >&2; exit 1; }
 
 # Test coverage follows maintained Nextcloud releases and the newest available
 # RC/Beta at run time. The protected manual release still records the explicit

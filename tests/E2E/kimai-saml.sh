@@ -104,6 +104,35 @@ kimai_idp_json="$workspace/build/e2e/browser-artifacts/kimai-idp.json"
 # an old flat connection schema silently leaves the SAML routes unregistered.
 certificate="$(python3 -c 'import json,re,sys; c=json.load(open(sys.argv[1]))["certificate"]; c=re.sub(r"-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----", "", c); print(re.sub(r"\s+", "", c))' "$kimai_idp_json")"
 [[ "$certificate" =~ ^[A-Za-z0-9+/=]+$ ]] || fail 'Admin browser setup produced an invalid IdP certificate body'
+# Public IdP metadata must work after the certificate was created through the real
+# admin UI. This is HTTP evidence, not a source inspection.
+metadata_response="$(docker run --rm --network "$network" "$curl_image" --silent --show-error --write-out $'\n%{http_code}\n%{content_type}' http://e2e-nextcloud/apps/saml_provider/saml/metadata)" || fail 'Could not fetch Nextcloud IdP metadata'
+metadata_type="${metadata_response##*$'\n'}"; metadata_response="${metadata_response%$'\n'*}"
+metadata_status="${metadata_response##*$'\n'}"; metadata="${metadata_response%$'\n'*}"
+[[ "$metadata_status" == 200 ]] || fail "Generated IdP metadata returned HTTP $metadata_status, expected 200"
+[[ "$metadata_type" == application/samlmetadata+xml* ]] || fail "Generated IdP metadata returned unexpected content type: $metadata_type"
+printf '%s' "$metadata" | python3 -c 'import sys,xml.etree.ElementTree as E; E.fromstring(sys.stdin.read())' || fail 'Generated IdP metadata is not well-formed XML'
+printf '%s' "$metadata" | grep -Fq 'entityID="http://e2e-nextcloud/apps/saml_provider/saml/metadata"' || fail 'Metadata EntityID is wrong'
+printf '%s' "$metadata" | grep -Fq 'Location="http://e2e-nextcloud/apps/saml_provider/saml/sso"' || fail 'Metadata SSO URL is wrong'
+printf '%s' "$metadata" | grep -Fq "$certificate" || fail 'Metadata does not publish the generated signing certificate'
+# Both unspecified NameID namespace variants must be accepted by the *running*
+# public SSO endpoint. Kimai 2.65 sends the 1.1 spelling; configuration stores 2.0.
+for nameid_urn in 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified' 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified'; do
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  request_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_nameid$(date +%s%N)" Version="2.0" IssueInstant="$now" AssertionConsumerServiceURL="http://e2e-kimai:8001/auth/saml/acs"><saml:Issuer>http://e2e-kimai:8001/auth/saml/metadata</saml:Issuer><samlp:NameIDPolicy Format="$nameid_urn"/></samlp:AuthnRequest>"
+  probe="$(printf '%s' "$request_xml" | base64 -w0)"
+  status="$(docker run --rm --network "$network" "$curl_image" --silent --output /dev/null --write-out '%{http_code}' --data-urlencode "SAMLRequest=$probe" http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail "Could not send $nameid_urn probe"
+  [[ "$status" == 302 ]] || fail "Running SSO endpoint rejected supported NameIDPolicy $nameid_urn with HTTP $status"
+done
+# Unsupported NameID policies must be rejected by the running public SSO endpoint,
+# proving that the accepted 1.1/2.0 unspecified values are a deliberate allowlist.
+unsupported_urn='urn:example:unsupported-nameid-format'
+now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+unsupported_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_unsupported$(date +%s%N)" Version="2.0" IssueInstant="$now" AssertionConsumerServiceURL="http://e2e-kimai:8001/auth/saml/acs"><saml:Issuer>http://e2e-kimai:8001/auth/saml/metadata</saml:Issuer><samlp:NameIDPolicy Format="$unsupported_urn"/></samlp:AuthnRequest>"
+unsupported_probe="$(printf '%s' "$unsupported_xml" | base64 -w0)"
+unsupported_status="$(docker run --rm --network "$network" "$curl_image" --silent --output /dev/null --write-out '%{http_code}' --data-urlencode "SAMLRequest=$unsupported_probe" http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail 'Could not send unsupported NameIDPolicy probe'
+[[ "$unsupported_status" == 400 ]] || fail "Running SSO endpoint accepted unsupported NameIDPolicy with HTTP $unsupported_status"
+echo 'NEXTCLOUD LIVE PROTOCOL CONTRACT: metadata, supported unspecified NameID formats, and unsupported NameID rejection passed.'
 cat > build/e2e/kimai-local.yaml <<YAML
 kimai:
   saml:
@@ -132,8 +161,10 @@ kimai:
       strict: true
       security:
         authnRequestsSigned: false
-        wantAssertionsSigned: false
-        wantMessagesSigned: false
+        # These are security assertions, not compatibility conveniences: the E2E
+        # must prove that Kimai validates the signed Response and signed Assertion.
+        wantAssertionsSigned: true
+        wantMessagesSigned: true
 YAML
 docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password "$mariadb_image" >/dev/null
 for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done
@@ -183,11 +214,13 @@ run_browser negative
 # Do not inspect Kimai's private database schema merely to restate that result.
 echo 'Invalid Nextcloud credentials correctly produced no Kimai ACS request.'
 
-echo 'Running positive IdP authentication test'
+echo 'Running positive signature-enforcing IdP authentication test'
 run_browser positive
-# A successful post-ACS browser navigation is the public, user-visible Kimai contract.
-# Do not depend on Kimai's internal user-table names or persistence layout.
-echo 'Kimai accepted the signed SAML response and established a browser session.'
+echo 'Kimai validated the signed SAML Response and Assertion and opened a protected session.'
+
+echo 'Running tampered signed-response rejection test'
+run_browser tampered
+echo 'Kimai rejected the browser-tampered signed SAML response without establishing a session.'
 
 echo 'Capturing populated Nextcloud SAML Provider admin settings for documentation'
 mkdir -p "$workspace/docs"

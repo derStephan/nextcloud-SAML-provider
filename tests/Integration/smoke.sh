@@ -17,16 +17,31 @@ case "$driver" in
 esac
 docker exec --user www-data "$container" "${install[@]}"
 docker exec --user www-data "$container" php occ app:enable saml_provider
-docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/nextcloud-api-contract.php
-docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/persistence-contract.php
-# Simulate an upgraded 0.8.0 table: keep all data, remove only the later index,
-# then execute Version0002 twice through Nextcloud's real migration runner.
-docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/prepare-version0002-upgrade.php
+run_cli_contract() {
+  local script="$1" output status
+  output="$(mktemp)"
+  if docker exec --user www-data "$container" php "/var/www/html/custom_apps/saml_provider/tests/Integration/$script" >"$output" 2>&1; then
+    cat "$output"
+    rm -f "$output"
+    return 0
+  fi
+  status=$?
+  cat "$output" >&2
+  rm -f "$output"
+  echo "Integration CLI contract failed: $script (exit $status)" >&2
+  return "$status"
+}
+run_cli_contract nextcloud-api-contract.php
+run_cli_contract persistence-contract.php
+# Direct PHP contracts are CLI processes, not HTTP endpoints: their authoritative
+# failure signal is a non-zero exit code. Their own exception handler enforces that.
+# HTTP status assertions below remain reserved for actual HTTP routes.
+run_cli_contract prepare-version0002-upgrade.php
 docker exec --user www-data "$container" php occ config:system:set debug --type=boolean --value=true >/dev/null
 docker exec --user www-data "$container" php occ migrations:execute saml_provider 0002Date20260828000000
-docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/upgrade-index-contract.php
+run_cli_contract upgrade-index-contract.php
 docker exec --user www-data "$container" php occ migrations:execute saml_provider 0002Date20260828000000
-docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/upgrade-index-contract.php
+run_cli_contract upgrade-index-contract.php
 docker exec --user www-data "$container" php occ config:system:delete debug >/dev/null
 test_entity="$(docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/prepare-signed-request-policy.php)"
 request_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_unsigned-policy" Version="2.0" IssueInstant="$(date -u +%Y-%m-%dT%H:%M:%SZ)"><saml:Issuer>${test_entity}</saml:Issuer></samlp:AuthnRequest>"

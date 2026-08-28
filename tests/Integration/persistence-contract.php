@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/bootstrap-app.php';
+// Direct integration contracts run in the CLI, not over HTTP. Nextcloud's web
+// exception renderer can otherwise turn an uncaught PHP exception into markup while
+// leaving the CLI process successful. Make every uncaught contract failure explicit.
+set_exception_handler(static function (\Throwable $error): never {
+    fwrite(STDERR, 'Integration contract failed: ' . $error->getMessage() . "\n");
+    exit(1);
+});
 /** Real Nextcloud DBAL CRUD: verifies production mapper insert, read, update, filtering, unique constraint, and delete. */
 use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Db\ServiceProviderMapper;

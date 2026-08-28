@@ -1,0 +1,127 @@
+{
+  "contracts": {
+    "OCP\\IAppConfig": [
+      "getValueString",
+      "setValueString"
+    ],
+    "OCP\\Server": [
+      "get"
+    ],
+    "OCP\\IURLGenerator": [
+      "getAbsoluteURL",
+      "linkToRouteAbsolute",
+      "linkTo",
+      "getBaseUrl",
+      "imagePath"
+    ],
+    "OCP\\IUser": [
+      "getUID",
+      "getEMailAddress",
+      "getDisplayName"
+    ],
+    "OCP\\IRequest": [
+      "getParam",
+      "getParams",
+      "getMethod"
+    ],
+    "OCP\\IUserSession": [
+      "isLoggedIn",
+      "getUser",
+      "logout"
+    ],
+    "OCP\\IL10N": [
+      "t"
+    ],
+    "OCP\\Util": [
+      "addScript",
+      "addStyle"
+    ],
+    "OCP\\IDBConnection": [
+      "getQueryBuilder",
+      "executeStatement",
+      "getPrefix"
+    ],
+    "OCP\\DB\\QueryBuilder\\IQueryBuilder": [
+      "select",
+      "from",
+      "where",
+      "expr",
+      "createNamedParameter",
+      "setMaxResults",
+      "executeQuery"
+    ],
+    "OCP\\AppFramework\\Services\\IInitialState": [
+      "provideInitialState"
+    ],
+    "OCP\\Settings\\ISettings": [
+      "getForm",
+      "getSection",
+      "getPriority"
+    ],
+    "OCP\\Settings\\IIconSection": [
+      "getID",
+      "getName",
+      "getPriority",
+      "getIcon"
+    ],
+    "OCP\\AppFramework\\App": [
+      "__construct"
+    ],
+    "OCP\\AppFramework\\Controller": [
+      "__construct"
+    ],
+    "OCP\\AppFramework\\Db\\Entity": [
+      "addType",
+      "markFieldUpdated",
+      "__call"
+    ],
+    "OCP\\AppFramework\\Db\\QBMapper": [
+      "__construct",
+      "findEntity",
+      "findEntities",
+      "getTableName"
+    ],
+    "OCP\\AppFramework\\Http\\TemplateResponse": [
+      "__construct",
+      "setContentSecurityPolicy"
+    ],
+    "OCP\\AppFramework\\Http\\DataResponse": [
+      "__construct"
+    ],
+    "OCP\\AppFramework\\Http\\RedirectResponse": [
+      "__construct"
+    ],
+    "OCP\\AppFramework\\Http\\DataDownloadResponse": [
+      "__construct"
+    ],
+    "OCP\\AppFramework\\Http\\ContentSecurityPolicy": [
+      "addAllowedFormActionDomain"
+    ],
+    "OCP\\Migration\\SimpleMigrationStep": [
+      "changeSchema"
+    ],
+    "OCP\\DB\\ISchemaWrapper": [
+      "hasTable",
+      "createTable",
+      "getTable"
+    ]
+  },
+  "types": [
+    "OCP\\AppFramework\\Db\\DoesNotExistException",
+    "OCP\\AppFramework\\Http",
+    "OCP\\AppFramework\\Http\\Attribute\\AuthorizedAdminSetting",
+    "OCP\\AppFramework\\Http\\Attribute\\NoAdminRequired",
+    "OCP\\AppFramework\\Http\\Attribute\\NoCSRFRequired",
+    "OCP\\AppFramework\\Http\\Attribute\\PublicPage",
+    "OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit",
+    "OCP\\AppFramework\\Http\\Attribute\\UserRateLimit",
+    "OCP\\Migration\\IOutput"
+  ],
+  "behavioral_probes": {
+    "OCP\\IDBConnection::getQueryBuilder/executeStatement/getPrefix": "runtime query-builder and prefixed-table operations are exercised by the real persistence and migration contracts on every database target",
+    "OCP\\DB\\QueryBuilder\\IQueryBuilder::executeQuery": "runtime API preflight executes a bounded real query on saml_provider_sp",
+    "OCP DB result::fetchAssociative/closeCursor": "runtime API preflight fetches one row and closes the actual cursor; migration contract uses the same documented path",
+    "OCP\\Util::addScript/addStyle": "reflection verifies both public methods on every selected Nextcloud target; page/admin unit behavior exercises their call sites with API-compatible doubles",
+    "OCP\\Migration\\SimpleMigrationStep::changeSchema and OCP\\DB\\ISchemaWrapper methods": "real occ migrations execute on SQLite, MariaDB, and PostgreSQL; the upgrade contract probes/restores the resulting index after each migration invocation"
+  }
+}

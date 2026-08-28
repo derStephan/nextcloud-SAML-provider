@@ -1,24 +1,41 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/bootstrap-app.php';
-/** Verifies persisted data and enabled-service index after Nextcloud executes the real Version0002 migration. */
+set_exception_handler(static function (\Throwable $error): never {
+    fwrite(STDERR, 'Integration contract failed: ' . $error->getMessage() . "\n");
+    exit(1);
+});
+/**
+ * Public-OCP-only verification of the real Version0002 result.
+ * No public read-only OCP schema inspector exists. The narrow portable DDL probe
+ * proves the named index exists, then restores it in finally so every test pass
+ * ends with the migration's valid schema state.
+ */
 use OCP\IDBConnection;
 use OCP\Server;
-
 $db = Server::get(IDBConnection::class);
-$schemaManager = $db->getSchemaManager();
-$indexes = $schemaManager->listTableIndexes($db->getPrefix() . 'saml_provider_sp');
-if (!array_key_exists('saml_provider_sp_enabled', $indexes)) {
-    throw new RuntimeException('Upgrade migration did not create saml_provider_sp_enabled.');
+$cursor = $db->getQueryBuilder()->select('id', 'sp_entity_id', 'sp_certificate', 'attribute_mapping', 'is_enabled')
+    ->from('saml_provider_sp')->setMaxResults(1)->executeQuery();
+try {
+    $row = $cursor->fetchAssociative();
+} finally {
+    $cursor->closeCursor();
 }
-$columns = $schemaManager->listTableColumns($db->getPrefix() . 'saml_provider_sp');
-$rows = $db->getQueryBuilder()->select('id')->from('saml_provider_sp')->setMaxResults(1)->executeQuery()->fetchAllAssociative();
-if ($rows === []) {
+if ($row === false) {
     throw new RuntimeException('Upgrade contract lost the persistence data created before migration.');
 }
-foreach (['sp_entity_id', 'sp_certificate', 'attribute_mapping', 'is_enabled'] as $column) {
-    if (!array_key_exists($column, $columns)) {
-        throw new RuntimeException("Upgrade schema lost required column: $column");
+$index = 'saml_provider_sp_enabled';
+$table = $db->getPrefix() . 'saml_provider_sp';
+$driver = getenv('NEXTCLOUD_DATABASE') ?: 'sqlite';
+$drop = $driver === 'mysql' ? "DROP INDEX $index ON $table" : "DROP INDEX $index";
+$create = "CREATE INDEX $index ON $table (is_enabled)";
+$dropped = false;
+try {
+    $db->executeStatement($drop);
+    $dropped = true;
+} finally {
+    if ($dropped) {
+        $db->executeStatement($create);
     }
 }
-echo "Version0002 additive upgrade index contract passed.\n";
+echo "Version0002 additive upgrade index contract passed and restored the verified schema.\n";

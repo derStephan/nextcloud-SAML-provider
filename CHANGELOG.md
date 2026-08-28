@@ -506,6 +506,26 @@
 
 ## [Unreleased]
 
+## [0.8.27] - 2026-08-28
+
+- Enforce an exact, generated OCP import/method inventory and runtime API preflight for every supported Nextcloud target.
+- Add a live unsupported NameIDPolicy rejection test and replace the undocumented migration-result fetch path with the documented OCP cursor API.
+- Record the proof-first test contract as the binding CI contract.
+
+
+## [0.8.26] - 2026-08-28
+
+- Make the Kimai interoperability test require signed SAML Responses and Assertions, verify a protected authenticated Kimai page, and reject a browser-tampered SAML response.
+- Replace source-marker claims with live HTTP protocol checks for both supported unspecified NameID formats and generated IdP metadata.
+- Complete the public OCP API contract and make upgrade-index probing restore the schema after each verification.
+
+
+## [0.8.25] - 2026-08-28
+
+- Repair the upgrade integration contract to use verified public OCP database operations only and fail direct CLI contracts with a non-zero exit status.
+- Accept both SAML 1.1 and SAML 2.0 `unspecified` NameID URNs for Kimai interoperability.
+
+
 ## [0.8.14] - 2026-08-28
 
 ### Fixed

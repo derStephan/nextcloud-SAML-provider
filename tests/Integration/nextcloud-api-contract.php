@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/bootstrap-app.php';
+// Direct integration contracts run in the CLI, not over HTTP. Nextcloud's web
+// exception renderer can otherwise turn an uncaught PHP exception into markup while
+// leaving the CLI process successful. Make every uncaught contract failure explicit.
+set_exception_handler(static function (\Throwable $error): never {
+    fwrite(STDERR, 'Integration contract failed: ' . $error->getMessage() . "\n");
+    exit(1);
+});
 
 /**
  * Verifies the exact public Nextcloud API surface used by production code.
@@ -11,42 +18,11 @@ require_once __DIR__ . '/bootstrap-app.php';
  * contract. Keep this list in sync whenever production code adds an OCP use.
  */
 
-/** @var array<string, list<string>> $contracts */
-$contracts = [
-    'OCP\\IAppConfig' => ['getValueString', 'setValueString'],
-    'OCP\\Server' => ['get'],
-    'OCP\\IURLGenerator' => ['getAbsoluteURL', 'linkToRouteAbsolute', 'linkTo', 'getBaseUrl', 'imagePath'],
-    'OCP\\IUser' => ['getUID', 'getEMailAddress', 'getDisplayName'],
-    'OCP\\IRequest' => ['getParam', 'getParams', 'getMethod'],
-    'OCP\\IUserSession' => ['isLoggedIn', 'getUser', 'logout'],
-    'OCP\\IL10N' => ['t'],
-    'OCP\\IDBConnection' => ['getQueryBuilder'],
-    'OCP\\DB\\QueryBuilder\\IQueryBuilder' => ['select', 'from', 'where', 'expr', 'createNamedParameter'],
-    'OCP\\AppFramework\\Services\\IInitialState' => ['provideInitialState'],
-    'OCP\\Settings\\ISettings' => ['getForm', 'getSection', 'getPriority'],
-    'OCP\\Settings\\IIconSection' => ['getID', 'getName', 'getPriority', 'getIcon'],
-    'OCP\\AppFramework\\App' => ['__construct'],
-    'OCP\\AppFramework\\Controller' => ['__construct'],
-    'OCP\\AppFramework\\Db\\Entity' => ['addType', 'markFieldUpdated', '__call'],
-    'OCP\\AppFramework\\Db\\QBMapper' => ['__construct', 'findEntity', 'findEntities', 'getTableName'],
-    'OCP\\AppFramework\\Http\\TemplateResponse' => ['__construct', 'setContentSecurityPolicy'],
-    'OCP\\AppFramework\\Http\\DataResponse' => ['__construct'],
-    'OCP\\AppFramework\\Http\\RedirectResponse' => ['__construct'],
-    'OCP\\AppFramework\\Http\\DataDownloadResponse' => ['__construct'],
-    'OCP\\AppFramework\\Http\\ContentSecurityPolicy' => ['addAllowedFormActionDomain'],
-    'OCP\\Migration\\SimpleMigrationStep' => ['changeSchema'],
-    'OCP\\DB\\ISchemaWrapper' => ['hasTable', 'createTable'],
-];
-$types = [
-    'OCP\\AppFramework\\Db\\DoesNotExistException',
-    'OCP\\AppFramework\\Http\\Attribute\\AuthorizedAdminSetting',
-    'OCP\\AppFramework\\Http\\Attribute\\NoAdminRequired',
-    'OCP\\AppFramework\\Http\\Attribute\\NoCSRFRequired',
-    'OCP\\AppFramework\\Http\\Attribute\\PublicPage',
-    'OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit',
-    'OCP\\AppFramework\\Http\\Attribute\\UserRateLimit',
-    'OCP\\Migration\\IOutput',
-];
+/** @var array{contracts: array<string, list<string>>, types: list<string>} $apiSpec */
+$apiSpec = json_decode((string)file_get_contents(__DIR__ . '/public-ocp-api.json'), true, 512, JSON_THROW_ON_ERROR);
+$contracts = $apiSpec['contracts'];
+$types = $apiSpec['types'];
+
 $missing = [];
 foreach ($contracts as $class => $methods) {
     if (!interface_exists($class) && !class_exists($class)) {
@@ -108,6 +84,22 @@ if (!class_exists($entityClass)) {
         $missing[] = 'Entity dynamic getId()/setId() contract failed';
     }
 }
+// Behavioral probe for the documented public query path used by the migration
+// contract. It proves the concrete result object supports fetchAssociative/closeCursor
+// on this selected Nextcloud/database target, rather than assuming a DBAL adapter API.
+try {
+    $db = \OCP\Server::get(\OCP\IDBConnection::class);
+    $result = $db->getQueryBuilder()->select('id')->from('saml_provider_sp')->setMaxResults(1)->executeQuery();
+    if (!method_exists($result, 'fetchAssociative') || !method_exists($result, 'closeCursor')) {
+        $missing[] = 'query result lacks documented fetchAssociative()/closeCursor() behavior';
+    } else {
+        $result->fetchAssociative();
+        $result->closeCursor();
+    }
+} catch (\Throwable $error) {
+    $missing[] = 'public query cursor behavior probe failed: ' . $error->getMessage();
+}
+
 if ($missing !== []) {
     fwrite(STDERR, "NEXTCLOUD PUBLIC API PREFLIGHT: FAILED\n"
         . "The selected Nextcloud release no longer provides a public OCP API used by this app.\n"

@@ -143,6 +143,7 @@ XML;
         if ($nameIdPolicy !== '' && !in_array($nameIdPolicy, [
             'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
             'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent',
+            'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
             'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified',
         ], true)) {
             throw new \InvalidArgumentException('SAMLRequest requests an unsupported NameID format');
@@ -160,7 +161,10 @@ XML;
     /** Reject a request that asks this SP for a different NameID representation. */
     public function enforceNameIdPolicy(array $authnRequest, ServiceProvider $sp): void {
         $requestedFormat = $authnRequest['nameIdPolicy'] ?? null;
-        if ($requestedFormat === null || $requestedFormat === 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified') {
+        if ($requestedFormat === null || in_array($requestedFormat, [
+            'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified',
+            'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified',
+        ], true)) {
             return;
         }
         if (!is_string($requestedFormat) || !hash_equals($sp->getNameIdFormat(), $requestedFormat)) {

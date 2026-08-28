@@ -125,27 +125,65 @@ persisted_nameid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1
 [[ "$persisted_acs" == 'http://e2e-kimai:8001/auth/saml/acs' ]] || fail "Persisted Kimai ACS URL is unexpected: $persisted_acs"
 [[ "$persisted_nameid" == 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified' ]] || fail "Persisted Kimai NameID format is unexpected: $persisted_nameid"
 
-probe_sso() {
-  local label="$1" request_xml="$2" expected_status="$3" request_file header_file body_file status
+probe_sso_login_redirect() {
+  local label="$1" request_xml="$2" request_file header_file body_file status payload
+  request_file="$workspace/build/e2e/browser-artifacts/sso-${label}-request.xml"
+  header_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-headers.txt"
+  body_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-body.html"
+  printf '%s' "$request_xml" > "$request_file"
+  # This is the real SAML HTTP-Redirect binding used by Kimai: raw DEFLATE then base64.
+  # A POST probe cannot prove that an anonymous-login redirect retains the request body.
+  payload="$(printf '%s' "$request_xml" | python3 -c 'import base64,sys,zlib; raw=sys.stdin.buffer.read(); c=zlib.compress(raw); print(base64.b64encode(c[2:-4]).decode())')"
+  status="$(docker run --rm --network "$network" --user "$(id -u):$(id -g)" \
+    --volume "$workspace/build/e2e/browser-artifacts:/artifacts" \
+    "$curl_image" --silent --show-error \
+    --output "/artifacts/$(basename "$body_file")" \
+    --dump-header "/artifacts/$(basename "$header_file")" \
+    --write-out '%{http_code}' --get --data-urlencode "SAMLRequest=$payload" \
+    http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail "Could not send SSO login probe $label"
+  if [[ ! "$status" =~ ^30[23]$ ]]; then
+    printf 'SSO login probe %s expected HTTP 302 or 303, received HTTP %s.\n' "$label" "$status" >&2
+    cat "$header_file" >&2 || true
+    head -c 4000 "$body_file" >&2 || true
+    docker logs "$nextcloud" >&2 || true
+    fail "Running SSO endpoint did not redirect accepted request $label to Nextcloud login"
+  fi
+  python3 - "$header_file" <<'PY'
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+import sys
+headers = Path(sys.argv[1]).read_text(errors='replace').replace('\r\n', '\n')
+locations = [line.split(':', 1)[1].strip() for line in headers.splitlines() if line.lower().startswith('location:')]
+if len(locations) != 1:
+    raise SystemExit(f'Expected exactly one Location header, got {locations!r}')
+location = locations[0]
+parsed = urlparse(location)
+if parsed.scheme != 'http' or parsed.netloc != 'e2e-nextcloud' or parsed.path != '/login':
+    raise SystemExit(f'Accepted SSO request redirected somewhere other than Nextcloud login: {location}')
+redirect = parse_qs(parsed.query).get('redirect_url', [''])[0]
+redirect_url = urlparse(redirect)
+if redirect_url.path != '/apps/saml_provider/saml/sso' or 'SAMLRequest' not in parse_qs(redirect_url.query):
+    raise SystemExit(f'Login redirect does not preserve the SAML HTTP-Redirect request: {location}')
+PY
+}
+
+probe_sso_rejection() {
+  local label="$1" request_xml="$2" request_file header_file body_file status
   request_file="$workspace/build/e2e/browser-artifacts/sso-${label}-request.xml"
   header_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-headers.txt"
   body_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-body.html"
   printf '%s' "$request_xml" > "$request_file"
   status="$(printf '%s' "$request_xml" | base64 -w0 | docker run -i --rm --network "$network" \
-    --user "$(id -u):$(id -g)" \
-    --volume "$workspace/build/e2e/browser-artifacts:/artifacts" \
-    "$curl_image" --silent --show-error \
-    --output "/artifacts/$(basename "$body_file")" \
-    --dump-header "/artifacts/$(basename "$header_file")" \
-    --write-out '%{http_code}' --data-urlencode 'SAMLRequest@-' \
-    http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail "Could not send SSO probe $label"
-  if [[ "$status" != "$expected_status" ]]; then
-    printf 'SSO probe %s expected HTTP %s, received HTTP %s.\n' "$label" "$expected_status" "$status" >&2
-    printf 'Request XML saved in %s; response headers/body saved in browser artifacts.\n' "$request_file" >&2
-    printf '%s\n' '--- response headers ---' >&2; cat "$header_file" >&2 || true
-    printf '%s\n' '--- response body (first 4000 bytes) ---' >&2; head -c 4000 "$body_file" >&2 || true; printf '\n' >&2
+    --user "$(id -u):$(id -g)" --volume "$workspace/build/e2e/browser-artifacts:/artifacts" \
+    "$curl_image" --silent --show-error --output "/artifacts/$(basename "$body_file")" \
+    --dump-header "/artifacts/$(basename "$header_file")" --write-out '%{http_code}' \
+    --data-urlencode 'SAMLRequest@-' http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail "Could not send rejected SSO probe $label"
+  if [[ "$status" != 400 ]]; then
+    printf 'Rejected SSO probe %s expected HTTP 400, received HTTP %s.\n' "$label" "$status" >&2
+    cat "$header_file" >&2 || true
+    head -c 4000 "$body_file" >&2 || true
     docker logs "$nextcloud" >&2 || true
-    fail "Running SSO endpoint returned unexpected HTTP status for $label"
+    fail "Running SSO endpoint did not reject unsupported request $label"
   fi
 }
 
@@ -159,12 +197,12 @@ for probe_label in nameid-unspecified-saml11 nameid-unspecified-saml20; do
   esac
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   request_xml="<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_nameid$(date +%s%N)\" Version=\"2.0\" IssueInstant=\"$now\" AssertionConsumerServiceURL=\"$persisted_acs\"><saml:Issuer>$persisted_entity</saml:Issuer><samlp:NameIDPolicy Format=\"$nameid_urn\"/></samlp:AuthnRequest>"
-  probe_sso "$probe_label" "$request_xml" 302
+  probe_sso_login_redirect "$probe_label" "$request_xml"
 done
 unsupported_urn='urn:example:unsupported-nameid-format'
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 unsupported_xml="<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_unsupported$(date +%s%N)\" Version=\"2.0\" IssueInstant=\"$now\" AssertionConsumerServiceURL=\"$persisted_acs\"><saml:Issuer>$persisted_entity</saml:Issuer><samlp:NameIDPolicy Format=\"$unsupported_urn\"/></samlp:AuthnRequest>"
-probe_sso unsupported-nameid "$unsupported_xml" 400
+probe_sso_rejection unsupported-nameid "$unsupported_xml"
 echo 'NEXTCLOUD LIVE PROTOCOL CONTRACT: persisted service, metadata, supported unspecified NameID formats, and unsupported NameID rejection passed.'
 cat > build/e2e/kimai-local.yaml <<YAML
 kimai:

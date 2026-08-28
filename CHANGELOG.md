@@ -506,6 +506,12 @@
 
 ## [Unreleased]
 
+## [0.8.31] - 2026-08-28
+
+- Exercise supported NameID policies through the real SAML HTTP-Redirect binding and verify a preserved Nextcloud login continuation, accepting either redirect status used by supported Nextcloud targets.
+- Keep unsupported NameIDPolicy rejection strict at HTTP 400.
+
+
 ## [0.8.30] - 2026-08-28
 
 - Use filesystem-safe fixed labels and explicit runner UID/GID for persisted SSO diagnostic artifacts.

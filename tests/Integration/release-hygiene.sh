@@ -48,6 +48,9 @@ grep -Fq 'isProtectedKimai' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2
 grep -Fq 'NEXTCLOUD LIVE PROTOCOL CONTRACT' tests/E2E/kimai-saml.sh || { echo 'Live metadata and NameID protocol checks are required.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml11' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 1.1 artifact label.' >&2; exit 1; }
 grep -Fq 'nameid-unspecified-saml20' tests/E2E/kimai-saml.sh || { echo 'Missing safe SAML 2.0 artifact label.' >&2; exit 1; }
+grep -Fq 'probe_sso_login_redirect' tests/E2E/kimai-saml.sh || { echo 'Supported NameID policies must use a real SAML Redirect-binding probe.' >&2; exit 1; }
+grep -Fq '^30[23]' tests/E2E/kimai-saml.sh || { echo 'Supported login probe must accept only Nextcloud login redirect statuses.' >&2; exit 1; }
+grep -Fq 'Login redirect does not preserve the SAML HTTP-Redirect request' tests/E2E/kimai-saml.sh || { echo 'Supported login probe must verify preserved SAML continuation.' >&2; exit 1; }
 grep -Fq -- '--user "$(id -u):$(id -g)"' tests/E2E/kimai-saml.sh || { echo 'Missing explicit artifact writer identity.' >&2; exit 1; }
 grep -Fq 'unsupported_nameid-format' tests/E2E/kimai-saml.sh || grep -Fq 'unsupported-nameid-format' tests/E2E/kimai-saml.sh || { echo 'Live unsupported NameID rejection test is required.' >&2; exit 1; }
 grep -Fq 'public-ocp-api.json' tests/Integration/nextcloud-api-contract.php || { echo 'Runtime API preflight must consume the machine-readable OCP specification.' >&2; exit 1; }

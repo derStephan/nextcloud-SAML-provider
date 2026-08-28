@@ -29,7 +29,24 @@ final class Request implements \OCP\IRequest { public function __construct(publi
 final class Session implements \OCP\IUserSession { public bool $loggedIn=false; public bool $loggedOut=false; public function __construct(public ?\OCP\IUser $user=null){} public function isLoggedIn():bool{return $this->loggedIn;} public function getUser():?\OCP\IUser{return $this->user;} public function logout():void{$this->loggedOut=true;$this->loggedIn=false;} }
 final class L10N implements \OCP\IL10N { public function t(string $text,array $parameters=[]):string{return $text;} }
 final class InitialState implements \OCP\AppFramework\Services\IInitialState { public array $values=[]; public function provideInitialState(string $key,mixed $value):void{$this->values[$key]=$value;} }
-final class RouteUrlGenerator extends UrlGenerator { public function linkToRouteAbsolute(string $route,array $params=[]):string{return 'https://cloud.example.test/'.$route.(isset($params['spId'])?'/'.$params['spId']:'');} public function linkTo(string $app,string $file):string{return '/apps/'.$app.'/'.$file;} public function getBaseUrl():string{return '/';} }
+final class RouteUrlGenerator extends UrlGenerator {
+    public function linkToRouteAbsolute(string $route, array $params = []): string {
+        $url = 'https://cloud.example.test/' . $route;
+        // The app's parameterised IdP route is represented as a path in this fixture.
+        if (isset($params['spId'])) {
+            $url .= '/' . rawurlencode((string)$params['spId']);
+            unset($params['spId']);
+        }
+        // Preserve all remaining route parameters. Controller tests must observe the
+        // same redirect_url propagation that Nextcloud receives in production.
+        if ($params !== []) {
+            $url .= '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+        }
+        return $url;
+    }
+    public function linkTo(string $app, string $file): string { return '/apps/' . $app . '/' . $file; }
+    public function getBaseUrl(): string { return '/'; }
+}
 
 final class TestServiceProviderMapper extends \OCA\SAMLProvider\Db\ServiceProviderMapper {
     public ?\OCA\SAMLProvider\Db\ServiceProvider $byEntityId = null;

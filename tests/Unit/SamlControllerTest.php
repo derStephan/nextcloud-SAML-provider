@@ -97,6 +97,13 @@ final class SamlControllerTest extends TestCase {
         self::assertSame(400, $response->status);
     }
 
+    public function testRouteUrlFixtureRetainsRedirectParameters(): void {
+        self::assertSame(
+            'https://cloud.example.test/core.login.showLoginForm?redirect_url=%2Ftarget%3Fa%3D1',
+            $this->urls->linkToRouteAbsolute('core.login.showLoginForm', ['redirect_url' => '/target?a=1'])
+        );
+    }
+
     public function testSsoRedirectPreservesRawQueryOnlyAfterRequestValidation(): void {
         $service = $this->validService($this->provider());
         $request = new Request(['SAMLRequest' => 'decoded value'], 'GET', ['QUERY_STRING' => 'SAMLRequest=decoded%20value&RelayState=next']);

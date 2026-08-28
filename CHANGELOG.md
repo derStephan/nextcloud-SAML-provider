@@ -434,6 +434,13 @@
 
 ## [Unreleased]
 
+## [0.8.10] - 2026-08-28
+
+### Fixed
+
+- Make the Nextcloud URL-generator test fixture preserve route query parameters, so the SSO login-return URL is tested as the application passes it to Nextcloud.
+
+
 ## [0.8.9] - 2026-08-28
 
 ### Fixed

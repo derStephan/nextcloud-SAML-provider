@@ -33,7 +33,14 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    durable rendered state, never transient toast text, for UI waits.
 6. Toolchain floor: PHP >=8.2; PHPUnit ^11.5; Node.js 24 in the pinned Playwright
    image; npm 12.0.2; Playwright 1.62.1. Keep versions explicit and compatible.
-7. CI hygiene: use actions/upload-artifact@v6 or later (Node 24 runtime). Keep logs
-   concise: suppress Docker layer progress, but preserve failed-command diagnostics.
+7. CI hygiene: use actions/upload-artifact@v6 or later (Node 24 runtime). Suppress
+   Docker layer progress for both integration and E2E image pulls, but preserve
+   failed-command diagnostics. Every successful complete Unit -> integration -> Kimai
+   E2E chain for main, including normal pushes and scheduled compatibility checks,
+   must create a patch release. Before any release work, fail clearly unless all
+   three required release secrets are present: NEXTCLOUD_SIGNING_PRIVATE_KEY,
+   NEXTCLOUD_SIGNING_CERTIFICATE, and NEXTCLOUD_APPSTORE_TOKEN. The App Store token
+   must be used for the actual signed archive upload. Runtime discovery updates tested README/App
+   Store compatibility metadata but must not suppress a release for a green main push.
 =================================================================
 CONTRACT

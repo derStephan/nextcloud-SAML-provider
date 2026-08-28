@@ -41,6 +41,15 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
       - name: Print durable test contract
         run: bash tests/Integration/print-test-contract.sh
+      - name: Pull required images without layer-progress noise
+        env:
+          NEXTCLOUD_IMAGE: ${{ matrix.target.image }}
+          DATABASE_IMAGE: ${{ matrix.database.driver == 'mysql' && 'mariadb:11.4' || matrix.database.driver == 'pgsql' && 'postgres:16-alpine' || '' }}
+        run: |
+          set -euo pipefail
+          pull_quietly() { local log; log="$(mktemp)"; if ! docker pull --quiet "$1" >"$log" 2>&1; then cat "$log" >&2; rm -f "$log"; exit 1; fi; rm -f "$log"; echo "Container image ready: $1"; }
+          pull_quietly "$NEXTCLOUD_IMAGE"
+          [[ -z "$DATABASE_IMAGE" ]] || pull_quietly "$DATABASE_IMAGE"
       - run: docker network create nextcloud-integration
       - name: Start MariaDB
         if: matrix.database.driver == 'mysql'

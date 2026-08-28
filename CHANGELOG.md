@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.8.23
+
+### Complete App Store release-secret preflight
+
+- Require and preflight the App Store token `NEXTCLOUD_APPSTORE_TOKEN` alongside the private signing key and public signing certificate.
+- Upload the signed GitHub release archive to the Nextcloud App Store using the required API token after GitHub release creation.
+
+## 0.8.22
+
+### Restore releases for every green main push
+
+- Release every complete successful Unit, database integration, and Kimai E2E chain on `main`, including normal pushes and scheduled compatibility checks; compatibility discovery updates metadata but no longer suppresses releases.
+- Add an early release preflight that clearly fails when `NEXTCLOUD_SIGNING_PRIVATE_KEY` or `NEXTCLOUD_SIGNING_CERTIFICATE` is missing.
+
+## 0.8.21
+
+### Compatibility automation, Kimai setup, and CI usability
+
+- Restore the GitHub download counter badge and remove the redundant release-version badge.
+- Restore complete administrator-facing Kimai/Nextcloud setup instructions.
+- Automatically publish a patch release after a fully successful compatibility test chain only when maintained PHP or Nextcloud compatibility changes; update README and App Store metadata from the tested result.
+- Quiet Docker image pulls in the Nextcloud integration matrix and fix Kimai E2E NameID editing through the rendered detail row.
+
 ## 0.8.20
 
 ### Mandatory coverage gate and Kimai NameID negotiation

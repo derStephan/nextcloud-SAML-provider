@@ -5,8 +5,10 @@ root = Path(__file__).resolve().parents[2]
 admin = (root / 'tests/E2E/configure-kimai-admin.mjs').read_text()
 browser = (root / 'tests/E2E/kimai-saml-browser.mjs').read_text()
 required_admin = [
+    "following-sibling::tr[1]",
+    "details.locator('summary').click()",
     "nameId.selectOption('urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified')",
-    "row.getByRole('button', { name: 'Save', exact: true }).click()",
+    "detailRow.getByRole('button', { name: 'Save changes', exact: true }).click()",
 ]
 required_browser = [
     "url.origin === expectedNextcloudOrigin && url.pathname.startsWith('/login')",

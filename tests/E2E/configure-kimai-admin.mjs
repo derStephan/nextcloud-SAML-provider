@@ -48,12 +48,15 @@ try {
   // service editor before starting Kimai. A mismatch is correctly rejected by SSO
   // before Nextcloud can redirect to its login page.
   await page.getByRole('button', { name: 'Connect service', exact: true }).click();
-  const serviceRow = page.getByText('Kimai E2E', { exact: true });
+  const serviceRow = page.getByText('Kimai E2E', { exact: true }).locator('xpath=ancestor::tr');
   await serviceRow.waitFor({ state: 'visible' });
-  const row = serviceRow.locator('xpath=ancestor::tr');
-  const nameId = row.locator('select').first();
+  const detailRow = serviceRow.locator('xpath=following-sibling::tr[1]');
+  const details = detailRow.locator('details');
+  await details.locator('summary').click();
+  const nameId = detailRow.locator('select').first();
+  await nameId.waitFor({ state: 'visible' });
   await nameId.selectOption('urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified');
-  await row.getByRole('button', { name: 'Save', exact: true }).click();
+  await detailRow.getByRole('button', { name: 'Save changes', exact: true }).click();
   await writeFile(output, JSON.stringify({ ...kimai, certificate }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${artifactDirectory}/admin-configuration-failure.png`, fullPage: true }).catch(() => {});

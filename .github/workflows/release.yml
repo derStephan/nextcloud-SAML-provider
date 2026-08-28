@@ -1,26 +1,9 @@
 name: Release app
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Exact semantic version to release, for example 0.8.6'
-        required: true
-        type: string
-      min_nextcloud:
-        description: 'Lowest Nextcloud major proven by the reviewed CI matrix'
-        required: true
-        default: '33'
-        type: string
-      max_nextcloud:
-        description: 'Highest Nextcloud major proven by the reviewed CI matrix'
-        required: true
-        default: '34'
-        type: string
-      release_notes:
-        description: 'Specific, user-visible Markdown release notes (not boilerplate)'
-        required: true
-        type: string
+  workflow_run:
+    workflows: ["Kimai SAML end-to-end test"]
+    types: [completed]
 
 permissions:
   contents: write
@@ -31,63 +14,110 @@ concurrency:
 
 jobs:
   release:
-    # The protected release environment is the approval gate. This workflow never
-    # starts from a push or from workflow_run, and it releases only the selected ref.
-    environment: release
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      !contains(github.event.workflow_run.head_commit.message, '[skip automated release]')
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Validate manual release inputs
+      - name: Preflight required release secrets
         env:
-          VERSION: ${{ inputs.version }}
-          MIN_VERSION: ${{ inputs.min_nextcloud }}
-          MAX_VERSION: ${{ inputs.max_nextcloud }}
-          NOTES: ${{ inputs.release_notes }}
+          NEXTCLOUD_SIGNING_PRIVATE_KEY: ${{ secrets.NEXTCLOUD_SIGNING_PRIVATE_KEY }}
+          NEXTCLOUD_SIGNING_CERTIFICATE: ${{ secrets.NEXTCLOUD_SIGNING_CERTIFICATE }}
+          NEXTCLOUD_APPSTORE_TOKEN: ${{ secrets.NEXTCLOUD_APPSTORE_TOKEN }}
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Version must be semantic x.y.z.' >&2; exit 1; }
-          [[ "$MIN_VERSION" =~ ^[0-9]+$ && "$MAX_VERSION" =~ ^[0-9]+$ ]] || { echo 'Nextcloud versions must be majors.' >&2; exit 1; }
-          (( MIN_VERSION <= MAX_VERSION )) || { echo 'Minimum version exceeds maximum version.' >&2; exit 1; }
-          [[ -n "${NOTES//[[:space:]]/}" ]] || { echo 'Release notes must be specific.' >&2; exit 1; }
-          [[ "$(git branch --show-current)" == 'main' ]] || { echo 'Releases must run from main.' >&2; exit 1; }
+          missing=()
+          [[ -n "${NEXTCLOUD_SIGNING_PRIVATE_KEY:-}" ]] || missing+=(NEXTCLOUD_SIGNING_PRIVATE_KEY)
+          [[ -n "${NEXTCLOUD_SIGNING_CERTIFICATE:-}" ]] || missing+=(NEXTCLOUD_SIGNING_CERTIFICATE)
+          [[ -n "${NEXTCLOUD_APPSTORE_TOKEN:-}" ]] || missing+=(NEXTCLOUD_APPSTORE_TOKEN)
+          if (( ${#missing[@]} > 0 )); then
+            printf '%s\n' "Release preflight failed: required repository or release-environment secret(s) are missing: ${missing[*]}" >&2
+            printf '%s\n' 'Add the missing secret(s) before running the tested release chain. No archive, tag, or GitHub release was created.' >&2
+            exit 1
+          fi
+          echo 'Release signing certificate and App Store token are present.'
+      - name: Confirm tested commit is current main
+        id: current
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          [[ "$(git rev-parse origin/main)" == "$HEAD_SHA" ]] && echo 'current=true' >> "$GITHUB_OUTPUT" || echo 'current=false' >> "$GITHUB_OUTPUT"
+      - name: Discover maintained PHP and Nextcloud compatibility
+        if: steps.current.outputs.current == 'true'
+        id: compatibility
+        run: |
+          set -euo pipefail
+          today="$(date -u +%F)"
+          php="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/php.json | jq --compact-output --arg today "$today" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+\\.[0-9]+$")) | select(((split(".")[0]|tonumber)>8) or ((split(".")[0]|tonumber)==8 and (split(".")[1]|tonumber)>=2))] | unique | sort')"
+          nc="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error https://endoflife.date/api/nextcloud.json | jq --compact-output --arg today "$today" '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+$")) | select(tonumber >= 33) | tonumber] | sort')"
+          [[ "$php" != '[]' && "$nc" != '[]' ]] || { echo 'No maintained targets discovered.' >&2; exit 1; }
+          echo "php=$php" >> "$GITHUB_OUTPUT"
+          echo "nc_min=$(jq 'first' <<< "$nc")" >> "$GITHUB_OUTPUT"
+          echo "nc_max=$(jq 'last' <<< "$nc")" >> "$GITHUB_OUTPUT"
+      - name: Confirm release after complete successful test chain
+        if: steps.current.outputs.current == 'true'
+        id: need
+        env:
+          PHP_TARGETS: ${{ steps.compatibility.outputs.php }}
+        run: |
+          set -euo pipefail
+          # Every successful main push and every successful scheduled compatibility
+          # run is a release candidate. Discovery updates recorded compatibility but
+          # must never suppress a release for a tested application change.
+          echo 'release=true' >> "$GITHUB_OUTPUT"
+          echo "php=$PHP_TARGETS" >> "$GITHUB_OUTPUT"
+          echo 'All required Unit, integration, and Kimai E2E workflows succeeded; release will proceed.'
       - uses: shivammathur/setup-php@v2
+        if: steps.need.outputs.release == 'true'
         with:
           php-version: '8.3'
           extensions: dom, openssl, pdo_sqlite
           coverage: none
-      - name: Prepare reviewed metadata and changelog
+      - name: Prepare tested compatibility metadata
+        if: steps.need.outputs.release == 'true'
+        id: metadata
         env:
-          VERSION: ${{ inputs.version }}
-          MIN_VERSION: ${{ inputs.min_nextcloud }}
-          MAX_VERSION: ${{ inputs.max_nextcloud }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: php scripts/prepare-release.php "$VERSION" "$MIN_VERSION" "$MAX_VERSION"
-      - name: Commit and tag manual release
-        id: release
+          PHP_TARGETS: ${{ steps.need.outputs.php }}
+          NC_MIN: ${{ steps.compatibility.outputs.nc_min }}
+          NC_MAX: ${{ steps.compatibility.outputs.nc_max }}
+        run: |
+          set -euo pipefail
+          old="$(sed -n 's:.*<version>\([0-9]*\.[0-9]*\.[0-9]*\)</version>.*:\1:p' appinfo/info.xml)"
+          IFS=. read -r major minor patch <<< "$old"
+          version="$major.$minor.$((patch + 1))"
+          php scripts/prepare-release.php "$version" "$NC_MIN" "$NC_MAX" "$PHP_TARGETS"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Commit and tag tested compatibility release
+        if: steps.need.outputs.release == 'true'
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.metadata.outputs.version }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add appinfo/info.xml CHANGELOG.md README.md
-          git diff --cached --quiet && { echo 'Release produced no metadata changes.' >&2; exit 1; }
-          git commit -m "Release v${VERSION}"
+          git diff --cached --quiet && { echo 'No compatibility metadata change.' >&2; exit 1; }
+          git commit -m "Release v${VERSION} [skip automated release]"
           git tag -a "v${VERSION}" -m "Release v${VERSION}"
           git push origin HEAD:main --follow-tags
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Create signed runtime-only archive
+      - name: Create signed App Store archive
+        if: steps.need.outputs.release == 'true'
         env:
           NEXTCLOUD_SIGNING_PRIVATE_KEY: ${{ secrets.NEXTCLOUD_SIGNING_PRIVATE_KEY }}
           NEXTCLOUD_SIGNING_CERTIFICATE: ${{ secrets.NEXTCLOUD_SIGNING_CERTIFICATE }}
-          NEXTCLOUD_VERSION: ${{ inputs.max_nextcloud }}
+          NEXTCLOUD_VERSION: ${{ steps.compatibility.outputs.nc_max }}
         run: |
           set -euo pipefail
           umask 077
-          secrets_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/saml-provider-signing.XXXXXX")"
+          secrets_dir="$(mktemp -d)"
           trap 'rm -rf "$secrets_dir"' EXIT
           printf '%s' "$NEXTCLOUD_SIGNING_PRIVATE_KEY" > "$secrets_dir/signing.key"
           printf '%s' "$NEXTCLOUD_SIGNING_CERTIFICATE" > "$secrets_dir/signing.crt"
@@ -95,8 +125,24 @@ jobs:
           docker run --rm --entrypoint php --volume "$PWD/build/release:/release" --volume "$secrets_dir:/secrets:ro" "nextcloud:${NEXTCLOUD_VERSION}-apache" /usr/src/nextcloud/occ integrity:sign-app --privateKey=/secrets/signing.key --certificate=/secrets/signing.crt --path=/release/saml_provider
           scripts/verify-appstore-package.sh build/release/saml_provider
           tar -C build/release -czf build/saml_provider.tar.gz saml_provider
-      - name: Create GitHub Release
+      - name: Create GitHub release
+        if: steps.need.outputs.release == 'true'
+        id: github-release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.release.outputs.version }}
-        run: gh release create "v${VERSION}" build/saml_provider.tar.gz --title "v${VERSION}" --generate-notes
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" build/saml_provider.tar.gz --title "v${VERSION}" --generate-notes
+          url="$(gh release view "v${VERSION}" --json assets --jq '.assets[] | select(.name == "saml_provider.tar.gz") | .url')"
+          [[ -n "$url" ]] || { echo 'GitHub release archive URL was not created.' >&2; exit 1; }
+          echo "download_url=$url" >> "$GITHUB_OUTPUT"
+      - name: Upload signed archive to Nextcloud App Store
+        if: steps.need.outputs.release == 'true'
+        uses: R0Wi/nextcloud-appstore-push-action@a011fe619bcf6e77ddebc96f9908e1af4071b9c1
+        with:
+          app_name: saml_provider
+          appstore_token: ${{ secrets.NEXTCLOUD_APPSTORE_TOKEN }}
+          download_url: ${{ steps.github-release.outputs.download_url }}
+          app_private_key: ${{ secrets.NEXTCLOUD_SIGNING_PRIVATE_KEY }}
+          nightly: false

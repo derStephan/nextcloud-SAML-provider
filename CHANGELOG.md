@@ -506,6 +506,12 @@
 
 ## [Unreleased]
 
+## [0.8.29] - 2026-08-28
+
+- Verify complete persisted Kimai service configuration after an admin-UI reload before live SAML protocol probes.
+- Retain SSO probe XML, response headers, and response bodies for actionable HTTP 400 diagnostics without weakening any assertion.
+
+
 ## [0.8.28] - 2026-08-28
 
 - Remove unsupported `IDBConnection::getPrefix()` and the non-public, destructive schema-index probe from integration tests.

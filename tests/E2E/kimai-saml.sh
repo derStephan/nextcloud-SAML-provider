@@ -116,23 +116,48 @@ printf '%s' "$metadata" | grep -Fq 'entityID="http://e2e-nextcloud/apps/saml_pro
 printf '%s' "$metadata" | grep -Fq 'Location="http://e2e-nextcloud/apps/saml_provider/saml/sso"' || fail 'Metadata SSO URL is wrong'
 printf '%s' "$metadata" | grep -Fq "$certificate" || fail 'Metadata does not publish the generated signing certificate'
 # Both unspecified NameID namespace variants must be accepted by the *running*
-# public SSO endpoint. Kimai 2.65 sends the 1.1 spelling; configuration stores 2.0.
+# public SSO endpoint. Persisted configuration is independently exported by the browser
+# setup; refuse to probe if the saved Entity ID or ACS URL is not the expected product state.
+persisted_entity="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["persisted"]["entityId"])' "$kimai_idp_json")"
+persisted_acs="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["persisted"]["acsUrl"])' "$kimai_idp_json")"
+persisted_nameid="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["persisted"]["nameIdFormat"])' "$kimai_idp_json")"
+[[ "$persisted_entity" == 'http://e2e-kimai:8001/auth/saml/metadata' ]] || fail "Persisted Kimai Entity ID is unexpected: $persisted_entity"
+[[ "$persisted_acs" == 'http://e2e-kimai:8001/auth/saml/acs' ]] || fail "Persisted Kimai ACS URL is unexpected: $persisted_acs"
+[[ "$persisted_nameid" == 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified' ]] || fail "Persisted Kimai NameID format is unexpected: $persisted_nameid"
+
+probe_sso() {
+  local label="$1" request_xml="$2" expected_status="$3" request_file header_file body_file status
+  request_file="$workspace/build/e2e/browser-artifacts/sso-${label}-request.xml"
+  header_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-headers.txt"
+  body_file="$workspace/build/e2e/browser-artifacts/sso-${label}-response-body.html"
+  printf '%s' "$request_xml" > "$request_file"
+  status="$(printf '%s' "$request_xml" | base64 -w0 | docker run -i --rm --network "$network" \
+    --volume "$workspace/build/e2e/browser-artifacts:/artifacts" \
+    "$curl_image" --silent --show-error \
+    --output "/artifacts/$(basename "$body_file")" \
+    --dump-header "/artifacts/$(basename "$header_file")" \
+    --write-out '%{http_code}' --data-urlencode 'SAMLRequest@-' \
+    http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail "Could not send SSO probe $label"
+  if [[ "$status" != "$expected_status" ]]; then
+    printf 'SSO probe %s expected HTTP %s, received HTTP %s.\n' "$label" "$expected_status" "$status" >&2
+    printf 'Request XML saved in %s; response headers/body saved in browser artifacts.\n' "$request_file" >&2
+    printf '%s\n' '--- response headers ---' >&2; cat "$header_file" >&2 || true
+    printf '%s\n' '--- response body (first 4000 bytes) ---' >&2; head -c 4000 "$body_file" >&2 || true; printf '\n' >&2
+    docker logs "$nextcloud" >&2 || true
+    fail "Running SSO endpoint returned unexpected HTTP status for $label"
+  fi
+}
+
 for nameid_urn in 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified' 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified'; do
   now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  request_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_nameid$(date +%s%N)" Version="2.0" IssueInstant="$now" AssertionConsumerServiceURL="http://e2e-kimai:8001/auth/saml/acs"><saml:Issuer>http://e2e-kimai:8001/auth/saml/metadata</saml:Issuer><samlp:NameIDPolicy Format="$nameid_urn"/></samlp:AuthnRequest>"
-  probe="$(printf '%s' "$request_xml" | base64 -w0)"
-  status="$(docker run --rm --network "$network" "$curl_image" --silent --output /dev/null --write-out '%{http_code}' --data-urlencode "SAMLRequest=$probe" http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail "Could not send $nameid_urn probe"
-  [[ "$status" == 302 ]] || fail "Running SSO endpoint rejected supported NameIDPolicy $nameid_urn with HTTP $status"
+  request_xml="<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_nameid$(date +%s%N)\" Version=\"2.0\" IssueInstant=\"$now\" AssertionConsumerServiceURL=\"$persisted_acs\"><saml:Issuer>$persisted_entity</saml:Issuer><samlp:NameIDPolicy Format=\"$nameid_urn\"/></samlp:AuthnRequest>"
+  probe_sso "$(basename "$nameid_urn")" "$request_xml" 302
 done
-# Unsupported NameID policies must be rejected by the running public SSO endpoint,
-# proving that the accepted 1.1/2.0 unspecified values are a deliberate allowlist.
 unsupported_urn='urn:example:unsupported-nameid-format'
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-unsupported_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_unsupported$(date +%s%N)" Version="2.0" IssueInstant="$now" AssertionConsumerServiceURL="http://e2e-kimai:8001/auth/saml/acs"><saml:Issuer>http://e2e-kimai:8001/auth/saml/metadata</saml:Issuer><samlp:NameIDPolicy Format="$unsupported_urn"/></samlp:AuthnRequest>"
-unsupported_probe="$(printf '%s' "$unsupported_xml" | base64 -w0)"
-unsupported_status="$(docker run --rm --network "$network" "$curl_image" --silent --output /dev/null --write-out '%{http_code}' --data-urlencode "SAMLRequest=$unsupported_probe" http://e2e-nextcloud/apps/saml_provider/saml/sso)" || fail 'Could not send unsupported NameIDPolicy probe'
-[[ "$unsupported_status" == 400 ]] || fail "Running SSO endpoint accepted unsupported NameIDPolicy with HTTP $unsupported_status"
-echo 'NEXTCLOUD LIVE PROTOCOL CONTRACT: metadata, supported unspecified NameID formats, and unsupported NameID rejection passed.'
+unsupported_xml="<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_unsupported$(date +%s%N)\" Version=\"2.0\" IssueInstant=\"$now\" AssertionConsumerServiceURL=\"$persisted_acs\"><saml:Issuer>$persisted_entity</saml:Issuer><samlp:NameIDPolicy Format=\"$unsupported_urn\"/></samlp:AuthnRequest>"
+probe_sso unsupported-nameid "$unsupported_xml" 400
+echo 'NEXTCLOUD LIVE PROTOCOL CONTRACT: persisted service, metadata, supported unspecified NameID formats, and unsupported NameID rejection passed.'
 cat > build/e2e/kimai-local.yaml <<YAML
 kimai:
   saml:

@@ -43,12 +43,19 @@ try {
   await page.locator('#saml-provider-new-sp-name').fill(kimai.name);
   await page.locator('#saml-provider-new-sp-entity-id').fill(kimai.entityId);
   await page.locator('#saml-provider-new-sp-acs-url').fill(kimai.acsUrl);
-  // Kimai 2.65 advertises an unspecified NameID in its SP metadata. Create first
-  // via the real admin UI, then set that negotiated policy through the rendered
-  // service editor before starting Kimai. A mismatch is correctly rejected by SSO
-  // before Nextcloud can redirect to its login page.
+  // The create response is an immediate transport result; the reload assertion below
+  // is the durable product proof. Both are required before SAML protocol probes.
+  const createResponse = page.waitForResponse((response) =>
+    response.url().includes('/apps/saml_provider/settings/sp')
+      && !response.url().includes('/update')
+      && response.request().method() === 'POST',
+    { timeout: 25_000 },
+  );
   await page.getByRole('button', { name: 'Connect service', exact: true }).click();
-  const serviceRow = page.getByText('Kimai E2E', { exact: true }).locator('xpath=ancestor::tr');
+  const created = await createResponse;
+  if (!created.ok()) throw new Error(`Kimai service creation failed with HTTP ${created.status()}.`);
+
+  const serviceRow = page.getByText(kimai.name, { exact: true }).locator('xpath=ancestor::tr');
   await serviceRow.waitFor({ state: 'visible' });
   const detailRow = serviceRow.locator('xpath=following-sibling::tr[1]');
   const details = detailRow.locator('details');
@@ -62,22 +69,29 @@ try {
     { timeout: 25_000 },
   );
   await detailRow.getByRole('button', { name: 'Save changes', exact: true }).click();
-  const response = await saveResponse;
-  if (!response.ok()) throw new Error(`Kimai NameID update failed with HTTP ${response.status()}.`);
+  const updated = await saveResponse;
+  if (!updated.ok()) throw new Error(`Kimai NameID update failed with HTTP ${updated.status()}.`);
 
-  // A click is not evidence of persistence. Reload the real administration page and
-  // verify the database-backed service state before Kimai sends an AuthnRequest.
+  // A click or 2xx response is not persistence evidence. Reload the actual product
+  // UI and inspect the independently rendered stored service values.
   await page.goto(adminSettingsUrl, { waitUntil: 'networkidle' });
-  const persistedRow = page.getByText('Kimai E2E', { exact: true }).locator('xpath=ancestor::tr');
+  const persistedRow = page.getByText(kimai.name, { exact: true }).locator('xpath=ancestor::tr');
   await persistedRow.waitFor({ state: 'visible' });
+  const cells = persistedRow.locator('td');
+  const persistedName = (await cells.nth(0).innerText()).trim();
+  const persistedEntityId = (await cells.nth(1).innerText()).trim();
+  const persistedEnabled = await cells.nth(2).locator('input[type="checkbox"]').isChecked();
   const persistedDetailRow = persistedRow.locator('xpath=following-sibling::tr[1]');
   await persistedDetailRow.locator('details').locator('summary').click();
-  const persistedNameId = persistedDetailRow.locator('select').first();
-  await persistedNameId.waitFor({ state: 'visible' });
-  if (await persistedNameId.inputValue() !== requiredNameId) {
-    throw new Error(`Kimai NameID format was not persisted; expected ${requiredNameId}.`);
+  const persistedAcsUrl = await persistedDetailRow.locator('input[type="url"]').inputValue();
+  const persistedNameId = await persistedDetailRow.locator('select').first().inputValue();
+  const persisted = { name: persistedName, entityId: persistedEntityId, acsUrl: persistedAcsUrl, nameIdFormat: persistedNameId, isEnabled: persistedEnabled };
+  const expected = { name: kimai.name, entityId: kimai.entityId, acsUrl: kimai.acsUrl, nameIdFormat: requiredNameId, isEnabled: true };
+  const mismatches = Object.entries(expected).filter(([key, value]) => persisted[key] !== value);
+  if (mismatches.length > 0) {
+    throw new Error(`Kimai service was not persisted after reload: expected ${JSON.stringify(expected)}, got ${JSON.stringify(persisted)}.`);
   }
-  await writeFile(output, JSON.stringify({ ...kimai, certificate }, null, 2));
+  await writeFile(output, JSON.stringify({ ...kimai, certificate, persisted }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${artifactDirectory}/admin-configuration-failure.png`, fullPage: true }).catch(() => {});
   throw error;

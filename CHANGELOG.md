@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.8.43
+
+- Prevent a double patch increment during automated releases: when `appinfo/info.xml` changed in the tested commit, preserve its existing version for the tag and release; otherwise increment only the patch component.
+- Keep compatibility metadata updates while avoiding a duplicate automated changelog entry for a pre-versioned commit.
+
+## 0.8.42
+
+- Align release documentation with the actual protected workflow: every fully successful, current `main` chain is a patch-release candidate unless explicitly skipped or blocked by missing release secrets.
+- Document required release secrets, supported NameID representations, request-policy matching, and the built-in user attributes available for SAML attribute mapping.
+
 ## 0.8.41
 
 - Support the documented `OCP\\Util::getL10N()` optional-parameter rename (`forceLanguage` to `language`) across the maintained Nextcloud integration matrix while keeping its arity, required argument, and return type checked.

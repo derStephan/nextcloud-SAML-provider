@@ -33,6 +33,9 @@ grep -q 'appstore_token: ${{ secrets.NEXTCLOUD_APPSTORE_TOKEN }}' "$release" || 
 grep -q '\[skip automated release\]' "$release" || { echo 'Release must prevent self-triggered release loops.' >&2; exit 1; }
 grep -q 'environment: release' "$release" || { echo 'Release must use protected release environment.' >&2; exit 1; }
 grep -q 'scripts/prepare-release.php' "$release" || { echo 'Release must update compatibility metadata.' >&2; exit 1; }
+grep -Fq 'git diff --quiet HEAD^ HEAD -- appinfo/info.xml' "$release" || { echo 'Release must detect a version already changed in the tested commit.' >&2; exit 1; }
+grep -Fq 'preserving its existing version' "$release" || { echo 'Release must preserve a manually changed app version instead of incrementing twice.' >&2; exit 1; }
+grep -Fq 'auto-bump' scripts/prepare-release.php || { echo 'Release helper must distinguish automatic and pre-existing versions.' >&2; exit 1; }
 # Coverage is a release-blocking quality gate, not an informational report.
 grep -Fq 'php tests/check-coverage.php build/coverage/clover.xml 80' composer.json || { echo 'Production coverage must enforce the 80% threshold.' >&2; exit 1; }
 grep -Fq 'name: Enforce minimum 80% production statement coverage (blocking)' .github/workflows/tests.yml || { echo 'Unit workflow must include the named blocking coverage gate.' >&2; exit 1; }

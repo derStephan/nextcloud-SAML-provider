@@ -42,6 +42,19 @@ Use Nextcloud as a **SAML 2.0 Identity Provider**. People sign in to connected s
 6. Import the metadata URL in the connected service, or enter the IdP data manually.
 7. Start a login from the connected service and confirm the returned user identity.
 
+### NameID formats and attributes
+
+For each connected service, select the NameID format it requests. The requested format must match the format configured for that service; unsupported or mismatched requests are rejected.
+
+| NameID format | Value sent by Nextcloud | Typical use |
+| --- | --- | --- |
+| Email address | The user’s configured email address | Services that identify users by email |
+| Persistent | An installation-specific, per-user and per-service HMAC value | Privacy-preserving stable identifiers |
+| SAML 1.1 unspecified | The Nextcloud username | Services that request the SAML 1.1 `unspecified` URI |
+| SAML 2.0 unspecified | The Nextcloud username | Kimai and services that request the SAML 2.0 `unspecified` URI |
+
+Use attribute mapping to decide which available user values are included in a response. The built-in values are `uid` (Nextcloud username), `displayName`, and `mail` (email address when configured for the user). Configure the receiving service to consume the attribute names you map.
+
 ### IdP endpoints
 
 Replace `cloud.example.com` with the public Nextcloud host.
@@ -154,13 +167,21 @@ The application keeps JSON, JavaScript, and PHP catalogs in lockstep. Some expla
 
 ## Automated compatibility releases
 
-A scheduled compatibility check discovers maintained PHP and Nextcloud versions. Every fully successful Unit → integration → Kimai E2E chain for `main`, including regular pushes and scheduled compatibility checks, creates a patch release after the protected release requirements are met.
+A scheduled compatibility check discovers maintained PHP and Nextcloud versions. Every fully successful Unit → integration → Kimai E2E chain for the current `main` commit, including regular pushes and scheduled compatibility checks, is a patch-release candidate.
 
-1. The scheduled Unit workflow discovers maintained PHP 8.2+ releases and enforces the 80% production-coverage gate.
+1. The Unit workflow discovers maintained PHP 8.2+ releases and enforces the 80% production-coverage gate.
 2. The integration workflow discovers maintained Nextcloud majors plus the newest Apache RC/Beta and runs each target with SQLite, MariaDB, and PostgreSQL.
 3. Kimai E2E runs the full real-browser SAML journey for every discovered Nextcloud target and captures one populated administration screenshot per successful target.
-4. After every completely green `main` chain, the release workflow compares the freshly tested maintained Nextcloud range with the recorded compatibility marker.
-5. Only if the compatibility range changed, it updates the README and App Store description, increments the patch version, signs the runtime-only archive, tags it, and creates the GitHub/App Store release.
+4. After a completely green `main` chain, the release workflow confirms that the tested commit is still the current `main` commit and refreshes the recorded PHP and Nextcloud compatibility metadata.
+5. If `appinfo/info.xml` was not changed in the tested commit, the workflow increments the patch version. If that file was already changed in the tested commit, it preserves the existing version instead, preventing a second automatic increment. It then refreshes compatibility metadata, signs the runtime-only archive, tags the commit, and creates the GitHub and Nextcloud App Store release.
+
+A release is intentionally not created when the tested commit is no longer current on `main`, the commit message contains `[skip automated release]`, or the required release secrets are unavailable. The protected release environment must provide:
+
+- `NEXTCLOUD_SIGNING_PRIVATE_KEY`
+- `NEXTCLOUD_SIGNING_CERTIFICATE`
+- `NEXTCLOUD_APPSTORE_TOKEN`
+
+If any required secret is missing, the release preflight fails before it creates an archive, tag, or GitHub release.
 
 The release archive contains only runtime app files. It never contains test code, CI configuration, build directories, signing keys, or placeholder signatures.
 

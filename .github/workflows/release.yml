@@ -90,11 +90,29 @@ jobs:
           NC_MAX: ${{ steps.compatibility.outputs.nc_max }}
         run: |
           set -euo pipefail
-          old="$(sed -n 's:.*<version>\([0-9]*\.[0-9]*\.[0-9]*\)</version>.*:\1:p' appinfo/info.xml)"
-          IFS=. read -r major minor patch <<< "$old"
-          version="$major.$minor.$((patch + 1))"
-          php scripts/prepare-release.php "$version" "$NC_MIN" "$NC_MAX" "$PHP_TARGETS"
+          current_version="$(sed -n 's:.*<version>\([0-9]*\.[0-9]*\.[0-9]*\)</version>.*:\1:p' appinfo/info.xml)"
+          [[ -n "$current_version" ]] || { echo 'appinfo/info.xml does not contain a semantic app version.' >&2; exit 1; }
+
+          # A maintainer or an earlier automated change may already have bumped the
+          # app version in the commit that just passed the complete test chain. Only
+          # choose the next patch when this commit did not touch appinfo/info.xml.
+          auto_bump=true
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1 \
+            && ! git diff --quiet HEAD^ HEAD -- appinfo/info.xml; then
+            auto_bump=false
+          fi
+          if [[ "$auto_bump" == true ]]; then
+            IFS=. read -r major minor patch <<< "$current_version"
+            version="$major.$minor.$((patch + 1))"
+            echo "appinfo/info.xml was unchanged in the tested commit; automatically selected patch version $version."
+          else
+            version="$current_version"
+            echo "appinfo/info.xml changed in the tested commit; preserving its existing version $version without a second patch increment."
+          fi
+
+          php scripts/prepare-release.php "$version" "$NC_MIN" "$NC_MAX" "$PHP_TARGETS" "$auto_bump"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "auto_bump=$auto_bump" >> "$GITHUB_OUTPUT"
       - name: Commit and tag tested compatibility release
         if: steps.need.outputs.release == 'true'
         env:

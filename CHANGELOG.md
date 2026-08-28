@@ -434,6 +434,13 @@
 
 ## [Unreleased]
 
+## [0.8.13] - 2026-08-28
+
+### Fixed
+
+- Bootstrap the app namespace explicitly for standalone real-Nextcloud integration contracts, so DBAL persistence and signed-request contracts execute the production mapper and entity classes.
+
+
 ## [0.8.12] - 2026-08-28
 
 ### Fixed

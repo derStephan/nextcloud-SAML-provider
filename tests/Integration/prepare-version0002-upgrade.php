@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/bootstrap-app.php';
 /** Recreate the pre-0.8.5 index state without changing any persisted SP data. */
 use OCP\IDBConnection;
 use OCP\Server;

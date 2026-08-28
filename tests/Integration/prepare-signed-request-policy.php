@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/bootstrap-app.php';
 /** Prepare a real enabled SP whose unsigned AuthnRequests must be rejected by the public SSO route. */
 use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Db\ServiceProviderMapper;

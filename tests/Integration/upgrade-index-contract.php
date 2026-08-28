@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/bootstrap-app.php';
 /** Verifies persisted data and enabled-service index after Nextcloud executes the real Version0002 migration. */
 use OCP\IDBConnection;
 use OCP\Server;

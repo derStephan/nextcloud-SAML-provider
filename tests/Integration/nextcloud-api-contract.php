@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/bootstrap-app.php';
 
 /**
  * Verifies the exact public Nextcloud API surface used by production code.
@@ -9,8 +10,6 @@ declare(strict_types=1);
  * unit-test doubles are only behavioral test fixtures and must not extend this
  * contract. Keep this list in sync whenever production code adds an OCP use.
  */
-$nextcloudRoot = getenv('NEXTCLOUD_ROOT') ?: '/var/www/html';
-require_once $nextcloudRoot . '/lib/base.php';
 
 /** @var array<string, list<string>> $contracts */
 $contracts = [

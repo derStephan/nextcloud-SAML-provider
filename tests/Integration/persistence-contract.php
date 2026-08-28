@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/bootstrap-app.php';
 /** Real Nextcloud DBAL CRUD: verifies production mapper insert, read, update, filtering, unique constraint, and delete. */
 use OCA\SAMLProvider\Db\ServiceProvider;
 use OCA\SAMLProvider\Db\ServiceProviderMapper;

@@ -37,18 +37,14 @@
       "addStyle"
     ],
     "OCP\\IDBConnection": [
-      "getQueryBuilder",
-      "executeStatement",
-      "getPrefix"
+      "getQueryBuilder"
     ],
     "OCP\\DB\\QueryBuilder\\IQueryBuilder": [
       "select",
       "from",
       "where",
       "expr",
-      "createNamedParameter",
-      "setMaxResults",
-      "executeQuery"
+      "createNamedParameter"
     ],
     "OCP\\AppFramework\\Services\\IInitialState": [
       "provideInitialState"
@@ -116,12 +112,5 @@
     "OCP\\AppFramework\\Http\\Attribute\\AnonRateLimit",
     "OCP\\AppFramework\\Http\\Attribute\\UserRateLimit",
     "OCP\\Migration\\IOutput"
-  ],
-  "behavioral_probes": {
-    "OCP\\IDBConnection::getQueryBuilder/executeStatement/getPrefix": "runtime query-builder and prefixed-table operations are exercised by the real persistence and migration contracts on every database target",
-    "OCP\\DB\\QueryBuilder\\IQueryBuilder::executeQuery": "runtime API preflight executes a bounded real query on saml_provider_sp",
-    "OCP DB result::fetchAssociative/closeCursor": "runtime API preflight fetches one row and closes the actual cursor; migration contract uses the same documented path",
-    "OCP\\Util::addScript/addStyle": "reflection verifies both public methods on every selected Nextcloud target; page/admin unit behavior exercises their call sites with API-compatible doubles",
-    "OCP\\Migration\\SimpleMigrationStep::changeSchema and OCP\\DB\\ISchemaWrapper methods": "real occ migrations execute on SQLite, MariaDB, and PostgreSQL; the upgrade contract probes/restores the resulting index after each migration invocation"
-  }
+  ]
 }

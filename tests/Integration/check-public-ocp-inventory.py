@@ -7,10 +7,6 @@ spec = json.loads((root / 'tests/Integration/public-ocp-api.json').read_text(enc
 allowed = set(spec['contracts']) | set(spec['types'])
 if any(not methods for methods in spec['contracts'].values()):
     raise SystemExit('PUBLIC OCP INVENTORY FAILED: a public OCP contract type has no declared methods.')
-required_probes = {'OCP\\IDBConnection::getQueryBuilder/executeStatement/getPrefix', 'OCP\\DB\\QueryBuilder\\IQueryBuilder::executeQuery', 'OCP DB result::fetchAssociative/closeCursor', 'OCP\\Util::addScript/addStyle', 'OCP\\Migration\\SimpleMigrationStep::changeSchema and OCP\\DB\\ISchemaWrapper methods'}
-missing_probes = required_probes - set(spec.get('behavioral_probes', {}))
-if missing_probes:
-    raise SystemExit('PUBLIC OCP INVENTORY FAILED: required behavior probes are absent: ' + ', '.join(sorted(missing_probes)))
 imports: dict[str, list[str]] = {}
 for source in (root / 'lib').rglob('*.php'):
     for line_number, line in enumerate(source.read_text(encoding='utf-8').splitlines(), 1):

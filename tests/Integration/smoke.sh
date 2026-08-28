@@ -20,30 +20,47 @@ docker exec --user www-data "$container" php occ app:enable saml_provider
 run_cli_contract() {
   local script="$1" output status
   output="$(mktemp)"
-  if docker exec --user www-data "$container" php "/var/www/html/custom_apps/saml_provider/tests/Integration/$script" >"$output" 2>&1; then
-    cat "$output"
-    rm -f "$output"
-    return 0
-  fi
+  # Do not use `if command; then status=$?`: Bash exposes the conditional status
+  # there, which can turn a failed command into 0. Capture the process status directly.
+  set +e
+  docker exec --user www-data "$container" php "/var/www/html/custom_apps/saml_provider/tests/Integration/$script" >"$output" 2>&1
   status=$?
-  cat "$output" >&2
+  set -e
+  cat "$output"
   rm -f "$output"
-  echo "Integration CLI contract failed: $script (exit $status)" >&2
-  return "$status"
+  if (( status != 0 )); then
+    echo "Integration CLI contract failed: $script (exit $status)" >&2
+    exit "$status"
+  fi
 }
 run_cli_contract nextcloud-api-contract.php
 run_cli_contract persistence-contract.php
-# Direct PHP contracts are CLI processes, not HTTP endpoints: their authoritative
-# failure signal is a non-zero exit code. Their own exception handler enforces that.
-# HTTP status assertions below remain reserved for actual HTTP routes.
-run_cli_contract prepare-version0002-upgrade.php
+# The app enable path executes actual registered migrations. Execute Version0002 twice
+# through Nextcloud's supported occ runner and prove the real production mapper still
+# performs CRUD on the resulting schema after each call. No schema-manager or raw DDL
+# probe is allowed: OCP exposes no public portable schema inspection API for this index.
 docker exec --user www-data "$container" php occ config:system:set debug --type=boolean --value=true >/dev/null
 docker exec --user www-data "$container" php occ migrations:execute saml_provider 0002Date20260828000000
-run_cli_contract upgrade-index-contract.php
+run_cli_contract persistence-contract.php
 docker exec --user www-data "$container" php occ migrations:execute saml_provider 0002Date20260828000000
-run_cli_contract upgrade-index-contract.php
+run_cli_contract persistence-contract.php
 docker exec --user www-data "$container" php occ config:system:delete debug >/dev/null
-test_entity="$(docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/prepare-signed-request-policy.php)"
+# This helper produces an entity ID consumed below; run it through the same strict
+# status path and capture output only after its process has succeeded.
+policy_output="$(mktemp)"
+set +e
+docker exec --user www-data "$container" php /var/www/html/custom_apps/saml_provider/tests/Integration/prepare-signed-request-policy.php >"$policy_output" 2>&1
+policy_status=$?
+set -e
+if (( policy_status != 0 )); then
+  cat "$policy_output" >&2
+  rm -f "$policy_output"
+  echo "Integration CLI contract failed: prepare-signed-request-policy.php (exit $policy_status)" >&2
+  exit "$policy_status"
+fi
+test_entity="$(tr -d '\r\n' < "$policy_output")"
+rm -f "$policy_output"
+[[ -n "$test_entity" ]] || { echo 'prepare-signed-request-policy.php produced no entity ID' >&2; exit 1; }
 request_xml="<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_unsigned-policy" Version="2.0" IssueInstant="$(date -u +%Y-%m-%dT%H:%M:%SZ)"><saml:Issuer>${test_entity}</saml:Issuer></samlp:AuthnRequest>"
 unsigned_request="$(printf '%s' "$request_xml" | base64 -w0)"
 http_client="cu""rl"

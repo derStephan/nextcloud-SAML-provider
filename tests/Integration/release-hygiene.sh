@@ -48,8 +48,20 @@ grep -Fq 'isProtectedKimai' tests/E2E/kimai-saml-browser.mjs || { echo 'Kimai E2
 grep -Fq 'NEXTCLOUD LIVE PROTOCOL CONTRACT' tests/E2E/kimai-saml.sh || { echo 'Live metadata and NameID protocol checks are required.' >&2; exit 1; }
 grep -Fq 'unsupported_nameid-format' tests/E2E/kimai-saml.sh || grep -Fq 'unsupported-nameid-format' tests/E2E/kimai-saml.sh || { echo 'Live unsupported NameID rejection test is required.' >&2; exit 1; }
 grep -Fq 'public-ocp-api.json' tests/Integration/nextcloud-api-contract.php || { echo 'Runtime API preflight must consume the machine-readable OCP specification.' >&2; exit 1; }
-grep -Fq 'fetchAssociative' tests/Integration/upgrade-index-contract.php || { echo 'Migration contract must use the documented public cursor fetch API.' >&2; exit 1; }
 
+# Integration failure propagation and schema checks must use only public behavior.
+[[ ! -e tests/Integration/prepare-version0002-upgrade.php && ! -e tests/Integration/upgrade-index-contract.php ]] || { echo 'Unsupported destructive schema probe remains.' >&2; exit 1; }
+for source in tests/Integration/*.php tests/Integration/smoke.sh; do
+  [[ -f "$source" ]] || continue
+  case "$(basename "$source")" in public-api-preflight.sh|release-hygiene.sh) continue ;; esac
+  if grep -Eq 'getPrefix|getSchemaManager|listTableIndexes|listTableColumns|ConnectionAdapter' "$source"; then
+    echo "Integration test contains unsupported/private schema API usage: $source" >&2
+    exit 1
+  fi
+done
+grep -Fq 'status=$?' tests/Integration/smoke.sh || { echo 'Integration runner must capture the direct CLI exit status.' >&2; exit 1; }
+grep -Fq 'if (( status != 0 )); then' tests/Integration/smoke.sh || { echo 'Integration runner must fail immediately on a contract failure.' >&2; exit 1; }
+grep -Fq 'policy_status=$?' tests/Integration/smoke.sh || { echo 'Entity-policy preparation must capture its direct CLI exit status.' >&2; exit 1; }
 # Test coverage follows maintained Nextcloud releases and the newest available
 # RC/Beta at run time. The protected manual release still records the explicit
 # range that was proven by that successful run; it must not derive metadata itself.

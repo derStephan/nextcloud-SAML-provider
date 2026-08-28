@@ -506,6 +506,13 @@
 
 ## [Unreleased]
 
+## [0.8.28] - 2026-08-28
+
+- Remove unsupported `IDBConnection::getPrefix()` and the non-public, destructive schema-index probe from integration tests.
+- Make integration CLI failures propagate their real non-zero exit status; a failed contract can no longer reach the success marker.
+- Prove both real migration executions by rerunning production mapper persistence behavior after them.
+
+
 ## [0.8.27] - 2026-08-28
 
 - Enforce an exact, generated OCP import/method inventory and runtime API preflight for every supported Nextcloud target.

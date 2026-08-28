@@ -84,22 +84,6 @@ if (!class_exists($entityClass)) {
         $missing[] = 'Entity dynamic getId()/setId() contract failed';
     }
 }
-// Behavioral probe for the documented public query path used by the migration
-// contract. It proves the concrete result object supports fetchAssociative/closeCursor
-// on this selected Nextcloud/database target, rather than assuming a DBAL adapter API.
-try {
-    $db = \OCP\Server::get(\OCP\IDBConnection::class);
-    $result = $db->getQueryBuilder()->select('id')->from('saml_provider_sp')->setMaxResults(1)->executeQuery();
-    if (!method_exists($result, 'fetchAssociative') || !method_exists($result, 'closeCursor')) {
-        $missing[] = 'query result lacks documented fetchAssociative()/closeCursor() behavior';
-    } else {
-        $result->fetchAssociative();
-        $result->closeCursor();
-    }
-} catch (\Throwable $error) {
-    $missing[] = 'public query cursor behavior probe failed: ' . $error->getMessage();
-}
-
 if ($missing !== []) {
     fwrite(STDERR, "NEXTCLOUD PUBLIC API PREFLIGHT: FAILED\n"
         . "The selected Nextcloud release no longer provides a public OCP API used by this app.\n"

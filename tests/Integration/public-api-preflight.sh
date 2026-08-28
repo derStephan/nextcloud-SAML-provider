@@ -10,7 +10,7 @@ check() {
     local scope="$1" pattern="$2" guidance="$3"
     local hits
     hits="$(rg -n --glob '*.php' --glob '*.sh' --glob '*.mjs' --glob '*.js' --glob '*.yml' --glob '*.yaml' \
-        --glob '!public-api-preflight.sh' --glob '!print-test-contract.sh' "$pattern" "$scope" 2>/dev/null || true)"
+        --glob '!public-api-preflight.sh' --glob '!print-test-contract.sh' --glob '!release-hygiene.sh' "$pattern" "$scope" 2>/dev/null || true)"
     if [[ -n "$hits" ]]; then
         printf 'PUBLIC-API PREFLIGHT FAILED: private or unstable upstream API reference in %s:\n%s\nHow to fix: %s\n\n' \
             "$scope" "$hits" "$guidance" >&2

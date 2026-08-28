@@ -43,8 +43,17 @@ try {
   await page.locator('#saml-provider-new-sp-name').fill(kimai.name);
   await page.locator('#saml-provider-new-sp-entity-id').fill(kimai.entityId);
   await page.locator('#saml-provider-new-sp-acs-url').fill(kimai.acsUrl);
+  // Kimai 2.65 advertises an unspecified NameID in its SP metadata. Create first
+  // via the real admin UI, then set that negotiated policy through the rendered
+  // service editor before starting Kimai. A mismatch is correctly rejected by SSO
+  // before Nextcloud can redirect to its login page.
   await page.getByRole('button', { name: 'Connect service', exact: true }).click();
-  await page.getByText('Kimai E2E', { exact: true }).waitFor({ state: 'visible' });
+  const serviceRow = page.getByText('Kimai E2E', { exact: true });
+  await serviceRow.waitFor({ state: 'visible' });
+  const row = serviceRow.locator('xpath=ancestor::tr');
+  const nameId = row.locator('select').first();
+  await nameId.selectOption('urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified');
+  await row.getByRole('button', { name: 'Save', exact: true }).click();
   await writeFile(output, JSON.stringify({ ...kimai, certificate }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${artifactDirectory}/admin-configuration-failure.png`, fullPage: true }).catch(() => {});

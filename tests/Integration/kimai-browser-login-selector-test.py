@@ -6,6 +6,8 @@ required = [
     '#user, input[name="user"], input[autocomplete="username"]',
     '#password, input[name="password"], input[autocomplete="current-password"], input[type="password"]',
     'nextcloud-login-form-not-ready',
+    'Kimai SAML request did not reach the Nextcloud login route',
+    'nextcloud-login-redirect-not-completed',
     'inputs=${JSON.stringify(state.inputs)}',
     'no Kimai ACS request occurs',
 ]

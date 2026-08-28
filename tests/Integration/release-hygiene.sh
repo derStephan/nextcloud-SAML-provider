@@ -18,8 +18,14 @@ for forbidden in signing.key signing.crt release-version.txt; do
 done
 
 # Automatic releases turn test infrastructure into an unreviewed publishing path.
+# Coverage is a release-blocking quality gate, not an informational report.
+grep -Fq 'php tests/check-coverage.php build/coverage/clover.xml 80' composer.json || { echo 'Production coverage must enforce the 80% threshold.' >&2; exit 1; }
+grep -Fq 'name: Enforce minimum 80% production statement coverage (blocking)' .github/workflows/tests.yml || { echo 'Unit workflow must include the named blocking coverage gate.' >&2; exit 1; }
+grep -Fq 'run: composer test:coverage' .github/workflows/tests.yml || { echo 'Unit workflow must run the blocking coverage command.' >&2; exit 1; }
+
 python3 tests/Integration/kimai-certificate-normalization-test.py
 python3 tests/Integration/kimai-browser-login-selector-test.py
+python3 tests/Integration/kimai-nameid-and-redirect-test.py
 
 # A `with:` map must belong to the current action step. A run step inserted
 # between `uses:` and `with:` makes GitHub reject the workflow before tests start.

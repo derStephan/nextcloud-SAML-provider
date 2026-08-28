@@ -58,7 +58,8 @@ jobs:
         run: python3 tests/Integration/check-localization.py
       - name: Install test dependencies
         run: composer install --no-interaction --prefer-dist
-      - run: composer test:coverage
+      - name: Enforce minimum 80% production statement coverage (blocking)
+        run: composer test:coverage
       - name: Upload coverage report
         uses: codecov/codecov-action@v6
         with:

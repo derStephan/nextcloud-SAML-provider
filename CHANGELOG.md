@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.20
+
+### Mandatory coverage gate and Kimai NameID negotiation
+
+- Make the 80% `lib/` production-statement coverage threshold an explicitly named, blocking unit-test workflow gate and record the requirement in the durable test contract.
+- Configure Kimai's `unspecified` NameID through the real Nextcloud admin UI and wait for the completed Nextcloud login redirect before browser login-field handling.
+
 ## 0.8.19
 
 ### Nextcloud login-flow resilience

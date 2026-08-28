@@ -36,6 +36,14 @@ const kimaiAuthenticated = (url) => url.origin === expectedKimaiOrigin && !url.p
 try {
   await page.goto(kimaiUrl, { waitUntil: 'domcontentloaded' });
   if (/^http:\/\/e2e-nextcloud\/https?:\/\//.test(page.url())) throw new Error(`Kimai built an invalid IdP redirect: ${page.url()}. Check saml.connection.baseurl.`);
+  // Do not inspect login controls while a Kimai -> Nextcloud redirect is still in
+  // flight. A rejected SAML request remains on the SSO route; report that contract
+  // failure directly instead of disguising it as a missing input selector.
+  await page.waitForURL((url) => url.origin === expectedNextcloudOrigin && url.pathname.startsWith('/login'), { timeout: 25_000 }).catch(async () => {
+    const state = await page.evaluate(() => ({ title: document.title, text: document.body?.innerText.slice(0, 2_000) || '' }));
+    note('nextcloud-login-redirect-not-completed', { mode, url: page.url(), ...state });
+    throw new Error(`Kimai SAML request did not reach the Nextcloud login route; final URL: ${page.url()}`);
+  });
   // Nextcloud's semantic field identifiers are stable across its evolving login
   // markup. Do not rely exclusively on type=password: some supported releases and
   // login variants expose the password field by id/name while the type is applied later.

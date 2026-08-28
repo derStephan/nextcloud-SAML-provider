@@ -10,6 +10,8 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
 1. Unit tests: discover every currently maintained PHP release at runtime and run
    the complete PHPUnit suite on every discovered version. Minimum PHP is 8.2;
    PHPUnit must remain compatible with all selected PHP versions (currently ^11.5).
+   Enforce at least 80% production statement coverage for lib/ from Clover data as a
+   hard gate: the coverage check must exit non-zero and fail the workflow below 80%.
 2. Nextcloud integration tests: discover every maintained Nextcloud major release
    at runtime from endoflife.date (minimum supported major: 33), then add the newest
    available official Apache RC or beta image from Docker Hub. Run every target with

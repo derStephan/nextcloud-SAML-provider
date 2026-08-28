@@ -99,21 +99,41 @@ docker run --rm --network "$network" --ipc=host --user "$(id -u):$(id -g)" \
   "$playwright_image" node /work/configure-kimai-admin.mjs
 kimai_idp_json="$workspace/build/e2e/browser-artifacts/kimai-idp.json"
 [[ -s "$kimai_idp_json" ]] || fail 'Admin browser setup did not produce Kimai IdP configuration'
-certificate="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["certificate"].replace("\n", ""))' "$kimai_idp_json")"
-[[ -n "$certificate" ]] || fail 'Admin browser setup produced no IdP certificate'
+# Kimai consumes the certificate as a single base64 line without PEM markers.
+# Its 2.65 SAML bundle requires the nested connection.idp/connection.sp schema;
+# an old flat connection schema silently leaves the SAML routes unregistered.
+certificate="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1]))["certificate"]; print("".join(line for line in c.splitlines() if "CERTIFICATE" not in line))' "$kimai_idp_json")"
+[[ -n "$certificate" ]] || fail 'Admin browser setup produced no IdP certificate body'
 cat > build/e2e/kimai-local.yaml <<YAML
 kimai:
   saml:
     provider: nextcloud
     activate: true
+    title: Sign in with Nextcloud
+    mapping:
+      - { saml: \$mail, kimai: email }
+      - { saml: \$displayName, kimai: alias }
     connection:
-      baseurl: 'http://e2e-nextcloud'
-      entity_id: 'http://e2e-nextcloud/apps/saml_provider/saml/metadata'
-      sso_url: 'http://e2e-nextcloud/apps/saml_provider/saml/sso'
-      x509cert: '$certificate'
-    user:
-      username: Email
-      roles: []
+      idp:
+        entityId: 'http://e2e-nextcloud/apps/saml_provider/saml/metadata'
+        singleSignOnService:
+          url: 'http://e2e-nextcloud/apps/saml_provider/saml/sso'
+          binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
+        x509cert: '$certificate'
+      sp:
+        entityId: 'http://e2e-kimai:8001/auth/saml/metadata'
+        assertionConsumerService:
+          url: 'http://e2e-kimai:8001/auth/saml/acs'
+          binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
+        singleLogoutService:
+          url: 'http://e2e-kimai:8001/auth/saml/logout'
+          binding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
+      baseurl: 'http://e2e-kimai:8001/auth/saml/'
+      strict: true
+      security:
+        authnRequestsSigned: false
+        wantAssertionsSigned: false
+        wantMessagesSigned: false
 YAML
 docker run -d --name "$mariadb" --network "$network" -e MARIADB_DATABASE=kimai -e MARIADB_USER=kimai -e MARIADB_PASSWORD=kimai -e MARIADB_ROOT_PASSWORD=root-password "$mariadb_image" >/dev/null
 for attempt in $(seq 1 60); do docker exec "$mariadb" mariadb-admin ping -h localhost -uroot -proot-password --silent && break; [[ "$attempt" == 60 ]] && fail 'MariaDB did not become ready'; sleep 2; done

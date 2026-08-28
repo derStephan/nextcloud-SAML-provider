@@ -22,7 +22,9 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    tested Nextcloud target and upload it as an artifact.
 5. E2E assertions: retain both invalid-credential and successful SSO flows. Verify
    Kimai metadata and its login redirect through public HTTP endpoints before browser
-   flow execution. Use durable rendered state, never transient toast text, for UI waits.
+   flow execution. Kimai 2.65+ requires connection.idp and connection.sp (not a flat
+   connection map), an email mapping, and its own /auth/saml/ base URL. Use durable
+   rendered state, never transient toast text, for UI waits.
 6. Toolchain floor: PHP >=8.2; PHPUnit ^11.5; Node.js 24 in the pinned Playwright
    image; npm 12.0.2; Playwright 1.62.1. Keep versions explicit and compatible.
 7. CI hygiene: use actions/upload-artifact@v6 or later (Node 24 runtime). Keep logs

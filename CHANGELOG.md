@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.17
+
+### Kimai 2.65 SAML compatibility
+
+- Use Kimai's current nested `connection.idp` and `connection.sp` configuration schema, explicit SP endpoints, a Kimai-local SAML base URL, and the required `mail` mapping so Kimai registers its SAML routes.
+- Pass the Nextcloud signing certificate in Kimai's recommended single-line body form without PEM markers.
+
 ## 0.8.16
 
 ### CI workflow repair

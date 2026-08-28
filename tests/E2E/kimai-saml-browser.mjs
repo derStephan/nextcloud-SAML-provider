@@ -36,10 +36,27 @@ const kimaiAuthenticated = (url) => url.origin === expectedKimaiOrigin && !url.p
 try {
   await page.goto(kimaiUrl, { waitUntil: 'domcontentloaded' });
   if (/^http:\/\/e2e-nextcloud\/https?:\/\//.test(page.url())) throw new Error(`Kimai built an invalid IdP redirect: ${page.url()}. Check saml.connection.baseurl.`);
-  const password = page.locator('input[type="password"]').first();
-  await password.waitFor({ state: 'visible' });
-  const username = page.locator('input:not([type]), input[type="text"], input[type="email"]').first();
-  await username.waitFor({ state: 'visible' });
+  // Nextcloud's semantic field identifiers are stable across its evolving login
+  // markup. Do not rely exclusively on type=password: some supported releases and
+  // login variants expose the password field by id/name while the type is applied later.
+  const username = page.locator('#user, input[name="user"], input[autocomplete="username"]').first();
+  const password = page.locator('#password, input[name="password"], input[autocomplete="current-password"], input[type="password"]').first();
+  const loginFormReady = await Promise.all([
+    username.waitFor({ state: 'visible', timeout: 25_000 }).then(() => true).catch(() => false),
+    password.waitFor({ state: 'visible', timeout: 25_000 }).then(() => true).catch(() => false),
+  ]);
+  if (!loginFormReady.every(Boolean)) {
+    const state = await page.evaluate(() => ({
+      title: document.title,
+      text: document.body?.innerText.slice(0, 2_000) || '',
+      inputs: Array.from(document.querySelectorAll('input')).map((input) => ({
+        id: input.id, name: input.getAttribute('name'), type: input.getAttribute('type'),
+        autocomplete: input.getAttribute('autocomplete'), visible: !!(input.offsetWidth || input.offsetHeight || input.getClientRects().length),
+      })),
+    }));
+    note('nextcloud-login-form-not-ready', { mode, url: page.url(), ...state });
+    throw new Error(`Nextcloud login form did not expose username and password fields at ${page.url()}; inputs=${JSON.stringify(state.inputs)}`);
+  }
   note('nextcloud-login-form-ready', { mode, url: page.url(), title: await page.title() });
   await username.fill('admin');
   await password.fill(mode === 'negative' ? 'deliberately-wrong-password' : 'integration-test-password');
@@ -54,7 +71,9 @@ try {
       throw new Error(`Invalid Nextcloud credentials escaped the login page: ${page.url()}`);
     }
     if (acsStatus !== null) throw new Error(`Invalid Nextcloud credentials reached Kimai ACS (HTTP ${acsStatus}).`);
-    await password.waitFor({ state: 'visible' });
+    // The observable security contract is that the failed login stays at Nextcloud
+    // and no Kimai ACS request occurs. Nextcloud may render password, passkey, or a
+    // throttling/error state afterwards, so do not require a second password-field draw.
     note('invalid-nextcloud-login-rejected', { url: page.url() });
     await snapshot('invalid-nextcloud-login-rejected');
     console.log('Invalid Nextcloud login was rejected without a Kimai ACS request.');

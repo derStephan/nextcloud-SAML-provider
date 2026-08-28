@@ -25,8 +25,10 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
    flow execution. Kimai 2.65+ requires connection.idp and connection.sp (not a flat
    connection map), an email mapping, and its own /auth/saml/ base URL. Normalize the
    generated certificate by removing only PEM markers and whitespace; support both
-   single-line and multi-line widget output. Use durable rendered state, never transient
-   toast text, for UI waits.
+   single-line and multi-line widget output. Target Nextcloud login fields by stable
+   id/name/autocomplete selectors rather than only input type. For invalid credentials,
+   require that the browser remains at Nextcloud and no Kimai ACS request occurs. Use
+   durable rendered state, never transient toast text, for UI waits.
 6. Toolchain floor: PHP >=8.2; PHPUnit ^11.5; Node.js 24 in the pinned Playwright
    image; npm 12.0.2; Playwright 1.62.1. Keep versions explicit and compatible.
 7. CI hygiene: use actions/upload-artifact@v6 or later (Node 24 runtime). Keep logs

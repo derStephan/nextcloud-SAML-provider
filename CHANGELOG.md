@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.19
+
+### Nextcloud login-flow resilience
+
+- Target Nextcloud login fields through stable id, name, and autocomplete selectors instead of relying only on `input[type=password]`.
+- Keep the invalid-login security assertion focused on the public contract: the browser must remain at Nextcloud and must not reach Kimai ACS; add concise input-state diagnostics when the login form is unavailable.
+
 ## 0.8.18
 
 ### E2E certificate normalization repair

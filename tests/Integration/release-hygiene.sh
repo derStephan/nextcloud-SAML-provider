@@ -19,6 +19,7 @@ done
 
 # Automatic releases turn test infrastructure into an unreviewed publishing path.
 python3 tests/Integration/kimai-certificate-normalization-test.py
+python3 tests/Integration/kimai-browser-login-selector-test.py
 
 # A `with:` map must belong to the current action step. A run step inserted
 # between `uses:` and `with:` makes GitHub reject the workflow before tests start.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.16
+
+### CI workflow repair
+
+- Keep each GitHub Action `with:` map adjacent to its `uses:` step; print the durable test contract only after checkout configuration is complete.
+- Add a release-hygiene guard against splitting `uses:` and `with:` blocks.
+
 ## 0.8.15
 
 ### CI and E2E resilience

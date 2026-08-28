@@ -37,10 +37,10 @@ jobs:
         target: ${{ fromJSON(needs.nextcloud-versions.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
-      - name: Print durable test contract
-        run: bash tests/Integration/print-test-contract.sh
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Print durable test contract
+        run: bash tests/Integration/print-test-contract.sh
       - id: app-version
         name: Read app version
         shell: bash

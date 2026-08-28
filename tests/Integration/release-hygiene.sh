@@ -18,6 +18,19 @@ for forbidden in signing.key signing.crt release-version.txt; do
 done
 
 # Automatic releases turn test infrastructure into an unreviewed publishing path.
+# A `with:` map must belong to the current action step. A run step inserted
+# between `uses:` and `with:` makes GitHub reject the workflow before tests start.
+for workflow in .github/workflows/*.yml; do
+    if awk '''
+        /^[[:space:]]+- / { action = ($0 ~ /uses:/) }
+        /^[[:space:]]+uses:/ { action = 1 }
+        /^[[:space:]]+with:/ { if (!action) exit 1 }
+    ''' "$workflow"; then :; else
+        echo "A with: block must belong to the immediately current uses: step in $workflow" >&2
+        exit 1
+    fi
+done
+
 release=.github/workflows/release.yml
 grep -q '^  workflow_dispatch:' "$release" || { echo 'Release must require workflow_dispatch.' >&2; exit 1; }
 ! grep -q '^  workflow_run:' "$release" || { echo 'Release must not be triggered by workflow_run.' >&2; exit 1; }

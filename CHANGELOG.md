@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.24
+
+### Persisted Kimai NameID verification
+
+- Wait for the real NameID update response, reload the Nextcloud administration page, and verify that Kimai's `unspecified` NameID format persisted before starting the browser SSO test.
+
 ## 0.8.23
 
 ### Complete App Store release-secret preflight

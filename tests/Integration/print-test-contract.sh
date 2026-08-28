@@ -25,7 +25,9 @@ TEST CONTRACT - DO NOT WEAKEN WITHOUT EXPLICIT REVIEW
 5. E2E assertions: retain both invalid-credential and successful SSO flows. Verify
    Kimai metadata and its login redirect through public HTTP endpoints before browser
    flow execution. Kimai 2.65+ requires connection.idp and connection.sp (not a flat
-   connection map), an email mapping, and its own /auth/saml/ base URL. Normalize the
+   connection map), an email mapping, and its own /auth/saml/ base URL. Configure
+   Kimai's unspecified NameID through the real admin UI, wait for the successful save
+   response, reload, and verify its persisted value before running SSO. Normalize the
    generated certificate by removing only PEM markers and whitespace; support both
    single-line and multi-line widget output. Target Nextcloud login fields by stable
    id/name/autocomplete selectors rather than only input type. For invalid credentials,

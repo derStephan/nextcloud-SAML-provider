@@ -55,8 +55,28 @@ try {
   await details.locator('summary').click();
   const nameId = detailRow.locator('select').first();
   await nameId.waitFor({ state: 'visible' });
-  await nameId.selectOption('urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified');
+  const requiredNameId = 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified';
+  await nameId.selectOption(requiredNameId);
+  const saveResponse = page.waitForResponse((response) =>
+    response.url().includes('/apps/saml_provider/settings/sp/update') && response.request().method() === 'POST',
+    { timeout: 25_000 },
+  );
   await detailRow.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const response = await saveResponse;
+  if (!response.ok()) throw new Error(`Kimai NameID update failed with HTTP ${response.status()}.`);
+
+  // A click is not evidence of persistence. Reload the real administration page and
+  // verify the database-backed service state before Kimai sends an AuthnRequest.
+  await page.goto(adminSettingsUrl, { waitUntil: 'networkidle' });
+  const persistedRow = page.getByText('Kimai E2E', { exact: true }).locator('xpath=ancestor::tr');
+  await persistedRow.waitFor({ state: 'visible' });
+  const persistedDetailRow = persistedRow.locator('xpath=following-sibling::tr[1]');
+  await persistedDetailRow.locator('details').locator('summary').click();
+  const persistedNameId = persistedDetailRow.locator('select').first();
+  await persistedNameId.waitFor({ state: 'visible' });
+  if (await persistedNameId.inputValue() !== requiredNameId) {
+    throw new Error(`Kimai NameID format was not persisted; expected ${requiredNameId}.`);
+  }
   await writeFile(output, JSON.stringify({ ...kimai, certificate }, null, 2));
 } catch (error) {
   await page.screenshot({ path: `${artifactDirectory}/admin-configuration-failure.png`, fullPage: true }).catch(() => {});

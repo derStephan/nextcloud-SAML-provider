@@ -7,8 +7,14 @@ browser = (root / 'tests/E2E/kimai-saml-browser.mjs').read_text()
 required_admin = [
     "following-sibling::tr[1]",
     "details.locator('summary').click()",
-    "nameId.selectOption('urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified')",
+    "const requiredNameId = 'urn:oasis:names:tc:SAML:2.0:nameid-format:unspecified';",
+    "nameId.selectOption(requiredNameId)",
     "detailRow.getByRole('button', { name: 'Save changes', exact: true }).click()",
+    'await persistedNameId.inputValue() !== requiredNameId',
+    "const persistedRow = page.getByText('Kimai E2E', { exact: true })",
+    'if (!response.ok())',
+    "'/apps/saml_provider/settings/sp/update'",
+    'page.waitForResponse((response) =>',
 ]
 required_browser = [
     "url.origin === expectedNextcloudOrigin && url.pathname.startsWith('/login')",

@@ -231,7 +231,7 @@ Unit tests
         -> Kimai SAML interoperability test
 ```
 
-Each downstream workflow starts only when its direct predecessor succeeds and checks out that predecessor’s exact commit SHA. The reviewed CI matrix is deliberately fixed in the repository: PHP 8.1–8.3 and Nextcloud 33/34, with SQLite, MariaDB, and PostgreSQL for integration contracts. Changing the supported matrix requires a reviewed pull request; an external lifecycle or Docker Hub API cannot silently change release evidence.
+Each downstream workflow starts only when its direct predecessor succeeds and checks out that predecessor’s exact commit SHA. PHP unit tests dynamically cover all PHP minor versions reported as currently supported by the PHP lifecycle API. This keeps language-runtime support current and does not alter release metadata. In contrast, Nextcloud 33/34 and SQLite, MariaDB, and PostgreSQL are the reviewed, repository-controlled compatibility evidence for integration and release decisions; an external lifecycle or Docker Hub API cannot silently change those release targets.
 
 The **Release app** workflow is intentionally separate from CI. It has no `push` or `workflow_run` trigger: a maintainer starts it manually from `main`, supplies the exact semantic version, proven Nextcloud range, and specific user-visible release notes, and passes the protected `release` environment approval gate. The release workflow then updates only the selected metadata, creates an annotated tag, signs a runtime-only App Store archive, verifies that archive, and creates the GitHub release.
 
@@ -243,7 +243,7 @@ Persistent NameIDs are derived with HMAC-SHA256 from the Nextcloud user ID, the 
 
 ### Dependency and image provenance
 
-CI uses versioned action, container, npm, Composer, and Playwright references. The direct PHPUnit development dependency is fixed to version `10.5.0`; a reviewed `composer.lock` must still be generated in a Composer-capable environment before dependency resolution is fully reproducible. The browser E2E bootstrap still downloads the npm CLI and Playwright dependency graph during the run. It verifies downloaded bytes against registry-provided integrity metadata, which is useful transport integrity but is not an independently pinned supply-chain attestation. Likewise, Docker image tags are versioned but not digest-pinned. These are explicit residual supply-chain limitations, not release guarantees. Production archives contain no Composer or npm dependencies.
+CI uses versioned action, container, npm, Composer, and Playwright references. The PHPUnit development dependency follows the maintained `^10.5` line. Composer’s narrowly scoped audit exception for `PKSA-z3gr-8qht-p93v` applies only to that test-only dependency; it does not disable Composer audit globally and must be removed once an unaffected PHPUnit 10 release is available. A reviewed `composer.lock` must still be generated in a Composer-capable environment before dependency resolution is fully reproducible. The browser E2E bootstrap still downloads the npm CLI and Playwright dependency graph during the run. It verifies downloaded bytes against registry-provided integrity metadata, which is useful transport integrity but is not an independently pinned supply-chain attestation. Likewise, Docker image tags are versioned but not digest-pinned. These are explicit residual supply-chain limitations, not release guarantees. Production archives contain no Composer or npm dependencies.
 
 
 ## Security notes
@@ -303,6 +303,6 @@ The coverage command writes `build/coverage/clover.xml` and fails when line cove
 
 GitHub Actions discovers currently supported PHP versions from the [endoflife.date PHP API](https://endoflife.date/php), tests each one, and runs weekly as well as on push, pull request, and manual dispatch. Before PHPUnit, it executes the Public API Preflight described above.
 
-The downstream Nextcloud workflow discovers supported **Nextcloud 33 or later** majors from the [Nextcloud lifecycle API](https://endoflife.date/nextcloud), plus the newest explicitly versioned Apache RC/beta image when available. It deliberately never uses Docker Hub's generic `beta` tag. The downstream Kimai workflow repeats that version matrix as a real browser SAML interoperability test.
+The downstream Nextcloud integration and Kimai browser workflows use the reviewed, repository-controlled Nextcloud 33/34 matrix. Updating these release-evidence targets requires a reviewed pull request; no external lifecycle or Docker Hub API can alter them during a run.
 
 The unit-test bootstrap loads lightweight behavioral fixtures for public `OCP` interfaces only. Those fixtures are not used as a compatibility authority: the public API contract is executed inside every selected real Nextcloud image.

@@ -11,15 +11,36 @@ permissions:
   contents: read
 
 jobs:
+  supported-php-versions:
+    name: Discover supported PHP versions
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.versions.outputs.versions }}
+    steps:
+      - id: versions
+        name: Build PHP version matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          versions="$(curl --fail --retry 3 --retry-delay 2 --silent --show-error \
+            https://endoflife.date/api/php.json \
+            | jq --compact-output --arg today "$(date -u +%F)" \
+              '[.[] | select(.eol == false or .eol >= $today) | .cycle | select(test("^[0-9]+\\.[0-9]+$"))] | unique | sort')"
+          if [[ "$versions" == "[]" ]]; then
+            echo "No supported PHP versions were returned by the lifecycle API." >&2
+            exit 1
+          fi
+          echo "Testing supported PHP versions: $versions"
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+
   phpunit:
     name: PHP ${{ matrix.php }}
+    needs: supported-php-versions
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Deliberately repository-controlled. Update through a reviewed pull request,
-        # rather than allowing an external lifecycle API to redefine release evidence.
-        php: ['8.1', '8.2', '8.3']
+        php: ${{ fromJSON(needs.supported-php-versions.outputs.versions) }}
     steps:
       - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
@@ -35,7 +56,8 @@ jobs:
         run: python3 tests/Integration/check-localization.py
       - name: Verify unit-test integrity
         run: python3 tests/Integration/check-test-suite-integrity.py
-      - run: composer install --no-interaction --prefer-dist
+      - name: Install test dependencies
+        run: composer install --no-interaction --prefer-dist
       - run: composer test:coverage
       - name: Upload coverage report
         uses: codecov/codecov-action@v6

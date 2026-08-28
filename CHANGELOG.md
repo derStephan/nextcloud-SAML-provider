@@ -434,6 +434,17 @@
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-08-28
+
+### Fixed
+
+- Hardened SAML HTTP-Redirect raw-query handling through a dedicated request adapter instead of direct PHP superglobal access.
+- Derived persistent NameIDs with HMAC-SHA256 and an installation-specific sensitive secret.
+- Restored the dynamic CI matrix for currently supported PHP versions.
+- Restored PHPUnit `^10.5` resolution and scoped the test-only Composer advisory exception to `PKSA-z3gr-8qht-p93v`.
+- Reduced shipped translations to complete English and German catalogs and strengthened localization and behavioral-contract checks.
+
+
 ### Added
 
 - Documentation and repository files required for public App Store submission.

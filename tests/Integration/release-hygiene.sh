@@ -25,7 +25,10 @@ grep -q 'environment: release' "$release" || { echo 'Release must use protected 
 
 # Compatibility evidence must be reviewable within the commit, rather than supplied
 # by an unauthenticated-at-build-time lifecycle or Docker Hub API response.
-for workflow in .github/workflows/tests.yml .github/workflows/nextcloud-integration.yml .github/workflows/kimai-saml-e2e.yml .github/workflows/release.yml; do
+# The PHP unit-test matrix intentionally follows currently supported PHP minors.
+# Release evidence must remain reviewable, so dynamic Nextcloud/Docker discovery
+# is forbidden only in integration, browser-E2E, and release workflows.
+for workflow in .github/workflows/nextcloud-integration.yml .github/workflows/kimai-saml-e2e.yml .github/workflows/release.yml; do
     ! grep -Eq 'endoflife\.date|hub\.docker\.com' "$workflow" || { echo "Dynamic release matrix source in $workflow" >&2; exit 1; }
 done
 

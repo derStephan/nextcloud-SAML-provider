@@ -11,7 +11,7 @@ if find . -path './.git' -prune -o -name signature.json -print | grep -q .; then
     echo 'Source tree contains a signature.json; only post-signing staging may contain one.' >&2
     exit 1
 fi
-matches="$(rg -l '\$_SERVER\[.QUERY_STRING.' lib || true)"
+matches="$(grep -rl --include='*.php' '\$_SERVER\[.QUERY_STRING.' lib 2>/dev/null || true)"
 [[ "$matches" == 'lib/Service/RawQueryService.php' ]] || { echo 'QUERY_STRING is permitted only in RawQueryService.' >&2; printf '%s\n' "$matches" >&2; exit 1; }
 for forbidden in signing.key signing.crt release-version.txt; do
     [[ ! -e "$forbidden" ]] || { echo "Ephemeral release material exists in source tree: $forbidden" >&2; exit 1; }

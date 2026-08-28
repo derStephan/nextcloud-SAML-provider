@@ -434,6 +434,17 @@
 
 ## [Unreleased]
 
+## [0.8.12] - 2026-08-28
+
+### Fixed
+
+- Make the release-hygiene check portable to standard GitHub runners by using `grep` instead of a `ripgrep` dependency.
+
+### Documentation
+
+- Add the Kimai browser end-to-end badge, current administrator screenshots, and a shorter setup-first README.
+
+
 ## [0.8.11] - 2026-08-28
 
 ### Fixed
